@@ -11,6 +11,7 @@ ImGui is used for the GUI which allows editting of various variables used to gen
 #include <memory>
 #include <random>
 #include <functional>
+#include <iterator>
 
 #define PI 3.14159265
 
@@ -184,8 +185,11 @@ int yVariationMin = 80;
 int yMultiplyer = 2;
 int zVariation = 500;
 
-int numLines = 500;
+int numLines = 100;
 int numLinesMax = 1000;
+int linesArraySize = 2000;
+
+int branchProbability = 0;
 
 // Camera controls
 float cameraPosx = 40;
@@ -204,37 +208,57 @@ auto rollx = std::bind(x, generator);
 auto rolly = std::bind(y, generator);
 auto rollz = std::bind(z, generator);
 
-
-// Returns the pointer to the array of lines that form the lightning
-std::shared_ptr<Line> DefineLightningLines(vec3 startPos) {
-
-	std::shared_ptr<Line> linesPtr(new Line[numLines], std::default_delete < Line[]>());
-
-	std::srand(std::time(nullptr));
+// Add a line to the lines array by setting their start and end points and createing a new branch randomly
+vec3 DefineLine(std::shared_ptr<Line> linesPtr, vec3 startPos, int i, int* lineCountPtr) {
 
 	vec3 point1 = startPos;
 	vec3 point2 = point1;
 
+	// TODO: change these to use rand
+	int dx = rollx() - xVariation;
+	int dy = -rolly() * yMultiplyer;
+	int dz = rollz() - zVariation;
+
+	point2.x += dx;
+	point2.y += dy;
+	point2.z += dz;
+
+	linesPtr.get()[*lineCountPtr].setup(ConvertWorldToScreen(point1), ConvertWorldToScreen(point2));
+	linesPtr.get()[*lineCountPtr].setColor(vec3(1, 1, 0));
+	//std::cout << ConvertWorldToScreen(point1).x << "," << ConvertWorldToScreen(point1).y << "," << ConvertWorldToScreen(point1).z << std::endl;
+	//std::cout << dx << "  " << dy << " " << dz << std::endl;
+	point1 = point2;
+	// each next line has start equal to the previous
+
+	// roll for a branch
+	int num = rand() % 100;
+	if (num > (100 - branchProbability)) {
+		vec3 branchPoint2 = point2;
+		for (int j = i; j < numLines; j++) {
+			*lineCountPtr = *lineCountPtr + 1;
+			// create a new branch
+			branchPoint2 = DefineLine(linesPtr, branchPoint2, j, lineCountPtr);
+		}
+
+	}
+	return point2;
+}
+
+// Returns the pointer to the array of lines that form the lightning
+int DefineLightningLines(vec3 startPos, std::shared_ptr<Line> linesPtr) {
+
+	int lineCount = 0;
+	int* lineCountPtr = &lineCount;
+
+	vec3 point1 = startPos;
+
 	// make all the lines
 	for (int i = 0; i < numLines; i++) {
-
-		int dx = rollx() - xVariation;
-		int dy = -rolly() * yMultiplyer;
-		int dz = rollz() - zVariation;
-
-		point2.x += dx;
-		point2.y += dy;
-		point2.z += dz;
-
-		linesPtr.get()[i].setup(ConvertWorldToScreen(point1), ConvertWorldToScreen(point2));
-		linesPtr.get()[i].setColor(vec3(1, 1, 0));
-		//std::cout << ConvertWorldToScreen(point1).x << "," << ConvertWorldToScreen(point1).y << "," << ConvertWorldToScreen(point1).z << std::endl;
-		//std::cout << dx << "  " << dy << " " << dz << std::endl;
-		point1 = point2;
-		// each next line has start equal to the previous
+		lineCount += 1;
+		point1 = DefineLine(linesPtr, point1, i, lineCountPtr);
 	}
 
-	return linesPtr;
+	return lineCount;
 }
 
 float vectorMagnitude(int x, int y, int z)
@@ -283,6 +307,7 @@ void ImGuiWindow(std::shared_ptr<float> rotationSpeed) {
 	ImGui::SliderInt("yVariationMin", &yVariationMin, 1, 500);
 	ImGui::SliderInt("zVariation", &zVariation, 1, 1000);
 	ImGui::SliderInt("numLines", &numLines, 50, numLinesMax);
+	ImGui::SliderInt("Branch Probability", &branchProbability, 0, 100);
 	ImGui::End();
 
 	// Camera Control window
@@ -296,6 +321,8 @@ void ImGuiWindow(std::shared_ptr<float> rotationSpeed) {
 }
 
 int main() {
+	// seed
+	std::srand(std::time(NULL));
 	// initialize and configure glfw
 	glfwInit();
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
@@ -323,10 +350,11 @@ int main() {
 
 	float angle = 0.0f;
 	// shared pointer, so it can be passed to the imgui window function
-	std::shared_ptr<float> rotationSpeed(new float(0.0f), std::default_delete<float>());
+	std::shared_ptr<float> rotationSpeed(new float(30.0f), std::default_delete<float>());
 
+	std::shared_ptr<Line> linesPtr(new Line[linesArraySize], std::default_delete < Line[]>());
 	// draw lines here -------------------------
-	std::shared_ptr<Line> linesPtr(DefineLightningLines(vec3(400, 8000, 0)));
+	int lineCount = DefineLightningLines(vec3(400, 8000, 0), linesPtr);
 	//------------------------------------------
 
 	// initialize imgui
@@ -352,8 +380,7 @@ int main() {
 		// recalculate lines		TODO: move to processInput, had problems with changing the shared pointer in processInput.
 		if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS) {
 			std::cout << "New Lightning Lines" << std::endl;
-			linesPtr.reset();
-			linesPtr = DefineLightningLines(vec3(400, 8000, 0));
+			lineCount = DefineLightningLines(vec3(400, 8000, 0), linesPtr);
 		}
 
 		// update camera position(rotating)
@@ -362,9 +389,12 @@ int main() {
 		mat4 view = lookAt(camera.position, vec3(0, 0, 0), vec3(0, 1, 0));
 
 		// draw lines
-		for (int i = 0; i < 100; i++) {
+		int numLines = 0;
+		
+		for (int i = 0; i < lineCount; i++) {
 			linesPtr.get()[i].setMVP(projection * view);
 			linesPtr.get()[i].draw();
+			//std::cout << "Line " << i << " drawn" << std::endl;
 		}
 
 		ImGuiWindow(rotationSpeed);
