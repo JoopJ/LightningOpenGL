@@ -25,6 +25,9 @@ ImGui is used for the GUI which allows editting of various variables used to gen
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>\
 
+// other files
+#include "Line.h"
+
 using glm::vec3;
 using glm::mat4;
 using std::vector;
@@ -54,120 +57,7 @@ public:
 };
 Camera camera;
 
-class Line {
-	int shaderProgram;
-	unsigned int VBO, VAO;
-	vector<float> vertices;
-	vec3 startPoint;
-	vec3 endPoint;
-	mat4 MVP = mat4(1.0f);
-	vec3 lineColor;
 
-public:
-	Line() {};		// use setup function so Lines made in array can be initialized
-	Line(vec3 start, vec3 end) {
-		setup(start, end);
-	}
-
-	void setup(vec3 start, vec3 end) {
-		startPoint = start;
-		endPoint = end;
-		lineColor = vec3(1, 1, 1);
-
-		const char* vertexShaderSource = "#version 450 core\n"
-			"layout (location = 0) in vec3 aPos;\n"
-			"uniform mat4 MVP;\n"
-			"void main()\n"
-			"{\n"
-			"   gl_Position = MVP * vec4(aPos.x, aPos.y, aPos.z, 1.0);\n"
-			"}\0";
-
-		const char* fragmentShaderSource = "#version 450 core\n"
-			"out vec4 FragColor;\n"
-			"uniform vec3 color;\n"
-			"void main()\n"
-			"{\n"
-			"   FragColor = vec4(color, 1.0f);\n"
-			"}\n\0";
-
-		// vertex shader
-		int vertexShader = glCreateShader(GL_VERTEX_SHADER);
-		glShaderSource(vertexShader, 1, &vertexShaderSource, NULL);
-		glCompileShader(vertexShader);
-
-		// fragmet shader
-		int fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-		glShaderSource(fragmentShader, 1, &fragmentShaderSource, NULL);
-		glCompileShader(fragmentShader);
-
-		// link shaders
-		shaderProgram = glCreateProgram();
-		glAttachShader(shaderProgram, vertexShader);
-		glAttachShader(shaderProgram, fragmentShader);
-		glLinkProgram(shaderProgram);
-
-		glDeleteShader(vertexShader);
-		glDeleteShader(fragmentShader);
-
-		vertices = {
-			start.x, start.y, start.z,
-			end.x, end.y, end.z,
-		};
-
-		// genereate and 
-		glGenVertexArrays(1, &VAO);
-		glGenBuffers(1, &VBO);
-		glBindVertexArray(VAO);
-
-		// bind and initialize buffer
-		glBindBuffer(GL_ARRAY_BUFFER, VBO);
-		glBufferData(GL_ARRAY_BUFFER, sizeof(vertices) * vertices.size(), vertices.data(), GL_STATIC_DRAW);
-
-		// define and enable array
-		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
-		glEnableVertexAttribArray(0);
-
-		// unbind
-		glBindBuffer(GL_ARRAY_BUFFER, 0);
-		glBindVertexArray(0);
-	}
-
-	int setMVP(mat4 mvp) {
-		MVP = mvp;
-		return 1;
-	}
-
-	int setColor(vec3 color) {
-		lineColor = color;
-		return 1;
-	}
-
-	int draw() {
-		// installs program as part of current rendering state
-		glUseProgram(shaderProgram);
-
-		// create MVP and color matrixes
-		glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "MVP"), 1, GL_FALSE, &MVP[0][0]);
-		glUniform3fv(glGetUniformLocation(shaderProgram, "color"), 1, &lineColor[0]);
-
-		// Actually droaw the stuff to the matrix
-		glBindVertexArray(VAO);
-		glDrawArrays(GL_LINES, 0, 2);
-		return -1;
-	}
-
-	int setPoints(vec3 start, vec3 end) {
-		startPoint = start;
-		endPoint = end;
-		return 1;
-	}
-
-	~Line() {
-		glDeleteVertexArrays(1, &VAO);
-		glDeleteBuffers(1, &VBO);
-		glDeleteProgram(shaderProgram);
-	}
-};
 
 vec3 ConvertWorldToScreen(vec3 pos) {
 
@@ -223,8 +113,8 @@ vec3 DefineLine(std::shared_ptr<Line> linesPtr, vec3 startPos, int i, int* lineC
 	point2.y += dy;
 	point2.z += dz;
 
-	linesPtr.get()[*lineCountPtr].setup(ConvertWorldToScreen(point1), ConvertWorldToScreen(point2));
-	linesPtr.get()[*lineCountPtr].setColor(vec3(1, 1, 0));
+	linesPtr.get()[*lineCountPtr].Setup(ConvertWorldToScreen(point1), ConvertWorldToScreen(point2));
+	linesPtr.get()[*lineCountPtr].SetColor(vec3(1, 1, 0));
 	//std::cout << ConvertWorldToScreen(point1).x << "," << ConvertWorldToScreen(point1).y << "," << ConvertWorldToScreen(point1).z << std::endl;
 	//std::cout << dx << "  " << dy << " " << dz << std::endl;
 	point1 = point2;
@@ -392,8 +282,8 @@ int main() {
 		int numLines = 0;
 		
 		for (int i = 0; i < lineCount; i++) {
-			linesPtr.get()[i].setMVP(projection * view);
-			linesPtr.get()[i].draw();
+			linesPtr.get()[i].SetMVP(projection * view);
+			linesPtr.get()[i].Draw();
 			//std::cout << "Line " << i << " drawn" << std::endl;
 		}
 
