@@ -2,7 +2,10 @@
 #include <glm/glm.hpp>
 using glm::vec3;
 
-vec3 ConvertWorldToScreen(vec3 pos, unsigned int SCR_WIDTH, unsigned int SCR_HEIGHT) {
+unsigned int SCR_WIDTH;
+unsigned int SCR_HEIGHT;
+
+vec3 ConvertWorldToScreen(vec3 pos) {
 
 	pos.x = 2 * pos.x / SCR_WIDTH - 1;
 	pos.y = 2 * pos.y / SCR_HEIGHT - 1;
@@ -19,4 +22,9 @@ float vectorMagnitude(int x, int y, int z)
 
 	// Return the magnitude
 	return sqrt(sum);
+}
+
+void SetWidthAndHeight(unsigned int width, unsigned int height) {
+	SCR_WIDTH = width;
+	SCR_HEIGHT = height;
 }

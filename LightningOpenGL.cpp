@@ -29,6 +29,7 @@ ImGui is used for the GUI which allows editting of various variables used to gen
 // other files
 #include "BoltGeneration/Line.h"
 #include "BoltGeneration/NaiveApproach.h"
+#include "FunctionLibrary.h"
 
 using glm::vec3;
 using glm::mat4;
@@ -145,7 +146,7 @@ void InitImGui(GLFWwindow* window) {
 int main() {
 	// seed
 	std::srand(std::time(NULL));
-
+	SetWidthAndHeight(SCR_WIDTH, SCR_HEIGHT);
 	
 	ConfigureWindow();
 	GLFWwindow* window = CreateWindow();

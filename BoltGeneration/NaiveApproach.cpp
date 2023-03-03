@@ -1,6 +1,6 @@
 #include <iostream>
 #include <random>
-#include<functional>
+#include <functional>
 
 #include <glm/glm.hpp>
 #include "../include/imgui/imgui.h"
