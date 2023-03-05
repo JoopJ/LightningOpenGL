@@ -6,6 +6,11 @@ tern.
 ImGui is used for the GUI which allows editting of various variables used to genereate the lightning pattern.
 */
 
+#define _CRTDBG_MAP_ALLOC
+#include <stdlib.h>
+#include <crtdbg.h>
+
+
 #include <iostream>
 #include <vector>
 #include <math.h>
@@ -37,15 +42,11 @@ using std::vector;
 using glm::radians;
 using glm::lookAt;
 
-float vectorMagnitude(int x, int y, int z);
-void processInput(GLFWwindow* window);
-
 const unsigned int SCR_WIDTH = 1000;
 const unsigned int SCR_HEIGHT = 800;
 
 float lastX = SCR_WIDTH / 2.0f;
 float lastY = SCR_HEIGHT / 2.0f;
-bool firstMouse = true;
 
 // time
 float deltaTime = 0.0f;
@@ -60,42 +61,46 @@ public:
 };
 Camera camera;
 
-// Camera controls
-float cameraPosx = 40;
-float cameraPosy = 40;
-float cameraPosz = 40;
-float cameraAngle = 45;
-float cameraMoveSpeed = 0.1f;
 
-
-// process all input: query GLFW whether relevant kesyare pressed / released this from and react accordingly
-void processInput(GLFWwindow* window) {
+// Input Processing:
+// ProcessMiscInput, process inputs relating to control of the application
+void ProcessMiscInput(GLFWwindow* window) {
 	if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
 		glfwSetWindowShouldClose(window, true);
+}
 
+// ProcessCameraInput, process inputs relating to control of the camera
+void ProcessCameraInput(GLFWwindow* window, float cameraMoveSpeed, float* cameraPosxPtr, float* cameraPosyPtr) {
 	// move camera position
 	if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) {
-		cameraPosy += cameraMoveSpeed;
+		*cameraPosyPtr += cameraMoveSpeed;
 	}
 	if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) {
-		cameraPosy -= cameraMoveSpeed;
+		*cameraPosyPtr -= cameraMoveSpeed;
 	}
 	if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) {
-		cameraPosx -= cameraMoveSpeed;
+		*cameraPosxPtr -= cameraMoveSpeed;
 	}
 	if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) {
-		cameraPosx += cameraMoveSpeed;
+		*cameraPosxPtr += cameraMoveSpeed;
 	}
 }
 
-void ImGuiWindow(std::shared_ptr<float> rotationSpeed) {
+// ProcessLightningControlInput, process inputs relating to control of the lightning
+void ProcessLightningControlInput(GLFWwindow* window, int* lineCount, std::shared_ptr<Line> linesPtr) {
+	// recalculate lines
+	if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS) {
+		*lineCount = DefineLightningLines(vec3(400, 8000, 0), linesPtr);
+	}
+}
+
+// render imgui
+void RenderImGui(std::shared_ptr<float> rotationSpeed) {
 	ImGui_ImplOpenGL3_NewFrame();
 	ImGui_ImplGlfw_NewFrame();
 	ImGui::NewFrame();
 
 	ImGui::Begin("Lightning");
-	// checkboxes
-	//ImGui::Checkbox("Branch", branching);	// TODO: impliment branching
 
 	GUINaiveApproach();
 
@@ -116,6 +121,8 @@ void ConfigureWindow() {
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
 	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 	glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE); // REMOVE IF ISSUE WITH MACS
+
+	glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GL_TRUE);
 }
 
 GLFWwindow* CreateWindow() {
@@ -144,6 +151,13 @@ void InitImGui(GLFWwindow* window) {
 }
 
 int main() {
+	// Camera controls
+	float cameraPosx = 40;
+	float cameraPosy = 40;
+	float cameraPosz = 40;
+	float cameraAngle = 45;
+	float cameraMoveSpeed = 0.1f;
+
 	// seed
 	std::srand(std::time(NULL));
 	SetWidthAndHeight(SCR_WIDTH, SCR_HEIGHT);
@@ -167,6 +181,7 @@ int main() {
 	// Bolt Lines ptr
 	std::shared_ptr<Line> linesPtr(new Line[2000], std::default_delete < Line[]>());
 	// draw lines here -------------------------
+	SetLineArraySize(2000);
 	int lineCount = DefineLightningLines(vec3(400, 8000, 0), linesPtr);
 	//------------------------------------------
 
@@ -183,13 +198,9 @@ int main() {
 		deltaTime = currentFrame - lastFrame;
 
 		// input
-		processInput(window);
-
-		// recalculate lines		TODO: move to processInput, had problems with changing the shared pointer in processInput.
-		if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS) {
-			std::cout << "New Lightning Lines" << std::endl;
-			lineCount = DefineLightningLines(vec3(400, 8000, 0), linesPtr);
-		}
+		ProcessMiscInput(window);
+		ProcessCameraInput(window, cameraMoveSpeed, &cameraPosx, &cameraPosy);
+		ProcessLightningControlInput(window, &lineCount, linesPtr);
 
 		// update camera position(rotating)
 		angle = deltaTime * *rotationSpeed;
@@ -204,7 +215,7 @@ int main() {
 			//std::cout << "Line " << i << " drawn" << std::endl;
 		}
 
-		ImGuiWindow(rotationSpeed);
+		RenderImGui(rotationSpeed);
 
 		// glfw: swap buffers and poll IO events
 		glfwSwapBuffers(window);
