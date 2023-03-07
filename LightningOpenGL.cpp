@@ -18,6 +18,7 @@ ImGui is used for the GUI which allows editting of various variables used to gen
 #include <random>
 #include <functional>
 #include <iterator>
+#include <string>
 
 #define PI 3.14159265
 
@@ -48,9 +49,11 @@ const unsigned int SCR_HEIGHT = 800;
 float lastX = SCR_WIDTH / 2.0f;
 float lastY = SCR_HEIGHT / 2.0f;
 
-// time
+// time for camera
 float deltaTime = 0.0f;
 float lastFrame = 0.0f;
+// time for the lightning
+double strikeStartTime;
 
 class Camera {
 public:
@@ -61,6 +64,22 @@ public:
 };
 Camera camera;
 
+
+enum Method { Naive, ParticalSystem };
+Method methods[2] = { Naive, ParticalSystem };
+std::string methodNames[2] = { "Naive", "Partical System" };
+int methodChoice = 0;
+
+int DefineBoltLines(vec3 startPos, std::shared_ptr<Line> linesPtr) {
+	switch (methods[methodChoice]) {
+	case Naive:
+		return DefineBoltLinesNA(startPos, linesPtr);
+		break;
+	default:
+		return 0;
+		break;
+	}
+}
 
 // Input Processing:
 // ProcessMiscInput, process inputs relating to control of the application
@@ -86,11 +105,19 @@ void ProcessCameraInput(GLFWwindow* window, float cameraMoveSpeed, float* camera
 	}
 }
 
+bool spaceHeld = false;
+
 // ProcessLightningControlInput, process inputs relating to control of the lightning
 void ProcessLightningControlInput(GLFWwindow* window, int* lineCount, std::shared_ptr<Line> linesPtr) {
 	// recalculate lines
-	if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS) {
-		*lineCount = DefineLightningLines(vec3(400, 8000, 0), linesPtr);
+	if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS && !spaceHeld) {
+		std::cout << "New Strike" << std::endl;
+		*lineCount = DefineBoltLines(vec3(400, 8000, 0), linesPtr);
+		spaceHeld = true;
+		strikeStartTime = glfwGetTime();
+	}
+	else if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_RELEASE) {
+		spaceHeld = false;
 	}
 }
 
@@ -105,9 +132,13 @@ void RenderImGui(std::shared_ptr<float> rotationSpeed) {
 	GUINaiveApproach();
 
 	// Camera Control window
-	ImGui::Begin("Camera");
+	ImGui::Begin("Options");
 	ImGui::Text("Camera options:");
 	ImGui::SliderFloat("rotationSpeed", rotationSpeed.get(), 0.0f, 100.0f);
+	ImGui::Text("Lightning Options:");
+	ImGui::SliderInt("Bolt Generation Method", &methodChoice, 0, 1);
+	ImGui::Text(("Current Method: " + methodNames[methodChoice]).c_str());
+
 	ImGui::End();
 
 	ImGui::Render();
@@ -182,7 +213,7 @@ int main() {
 	std::shared_ptr<Line> linesPtr(new Line[2000], std::default_delete < Line[]>());
 	// draw lines here -------------------------
 	SetLineArraySize(2000);
-	int lineCount = DefineLightningLines(vec3(400, 8000, 0), linesPtr);
+	int lineCount = DefineBoltLines(vec3(400, 8000, 0), linesPtr);
 	//------------------------------------------
 
 	InitImGui(window);
@@ -202,14 +233,21 @@ int main() {
 		ProcessCameraInput(window, cameraMoveSpeed, &cameraPosx, &cameraPosy);
 		ProcessLightningControlInput(window, &lineCount, linesPtr);
 
+		double strikeDuration = 0.1;
+		// draw lines one by one over time
+		double currentTime = glfwGetTime();
+		int numLinesToDraw = std::min((int)((currentTime - strikeStartTime) / (strikeDuration/lineCount)), lineCount);
+		if (numLinesToDraw != lineCount) {
+			std::cout << numLinesToDraw << std::endl;
+		}
+
 		// update camera position(rotating)
 		angle = deltaTime * *rotationSpeed;
 		camera.position = vec3(cameraPosx * cos(radians(angle)), cameraPosy, cameraPosz * sin(radians(angle)));
 		mat4 view = lookAt(camera.position, vec3(0, 0, 0), vec3(0, 1, 0));
 
 		// draw lines
-		int numLines = 0;
-		for (int i = 0; i < lineCount; i++) {
+		for (int i = 0; i < numLinesToDraw; i++) {
 			linesPtr.get()[i].SetMVP(projection * view);
 			linesPtr.get()[i].Draw();
 			//std::cout << "Line " << i << " drawn" << std::endl;
