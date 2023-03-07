@@ -14,8 +14,5 @@ Space - Recalculates the lightning pattern.
 W/A/S/D - Move the camera
 
 ### TODO:
-- clean up and comment code, more modular.
-- add requirements.
-- Move the recalculate lines section to the processInput function.
+- Next bolt generation method
 - Add mouse control for camera.  
-- Add option to create branches within pattern.
