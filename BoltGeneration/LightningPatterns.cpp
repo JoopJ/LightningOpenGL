@@ -4,16 +4,18 @@
 int xVariation = 450;
 int yVariation = 425;
 
-std::shared_ptr<glm::vec3[numLinesInPattern]> GenerateLightningPattern(glm::vec3 startPnt) {
-	std::shared_ptr<glm::vec3[numLinesInPattern]> lightningPattern = std::make_shared<glm::vec3[numLinesInPattern]>();
+std::shared_ptr<glm::vec3[numSegmentsInPattern]> GenerateLightningPattern(glm::vec3 startPnt) {
+	std::shared_ptr<glm::vec3[numSegmentsInPattern]> patternPtr = std::make_shared<glm::vec3[numSegmentsInPattern]>();
 
-	lightningPattern.get()[0] = ConvertWorldToScreen(startPnt);
-	for (int i = 1; i < numLinesInPattern; i++) {
+	patternPtr.get()[0] = ConvertWorldToScreen(startPnt);
+	for (int i = 1; i < numSegmentsInPattern; i++) {
 		//std::cout << "[" << prevPnt.x << "," << prevPnt.y << "]" << std::endl;
 		startPnt = NextPoint(startPnt);
-		lightningPattern.get()[i] = ConvertWorldToScreen(startPnt);
+		patternPtr.get()[i] = ConvertWorldToScreen(startPnt);
 	}
-	return lightningPattern;
+	std::cout << "A: " << patternPtr.get()[7].x << ", " << patternPtr.get()[7].y << "," << patternPtr.get()[7].z << std::endl;;
+
+	return patternPtr;
 }
 
 glm::vec3 NextPoint(glm::vec3 point) {

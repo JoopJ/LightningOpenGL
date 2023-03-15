@@ -9,7 +9,6 @@
 class TextureBolt {
 private:
 	unsigned int VAO, VBO, EBO;
-	int boltNum;
 	float vertices[32];
 	int indices[6] = { 0, 1, 3, 1, 2, 3 };
 	glm::vec3 startPoint;
@@ -19,5 +18,5 @@ public:
 	glm::vec3 color;
 	TextureBolt();	// called when Tbolt is created in array
 	void Draw();
-	void Setup(glm::vec3 start, glm::vec3 end, int boltNum);
+	void Setup(glm::vec3 start, glm::vec3 end);
 };

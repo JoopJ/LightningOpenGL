@@ -34,7 +34,9 @@ ImGui is used for the GUI which allows editting of various variables used to gen
 
 // other files
 #include "BoltGeneration/Line.h"
+#include "BoltGeneration/TextureBolt.h"
 #include "BoltGeneration/NaiveApproach.h"
+#include "BoltGeneration/LightningPatterns.h"
 #include "Shader/Shader.h"
 #include "FunctionLibrary.h"
 #include "CameraControl.h"
@@ -47,6 +49,8 @@ using glm::lookAt;
 
 // time for the lightning
 double strikeStartTime;
+// lightning start position
+const vec3 startPnt = vec3(400,8000, 0);
 
 enum Method { Naive, ParticalSystem };
 Method methods[2] = { Naive, ParticalSystem };
@@ -54,23 +58,18 @@ std::string methodNames[2] = { "Naive", "Partical System" };
 int methodChoice = 0;
 
 // function prototypes
-int DefineBoltLines(vec3 startPos, std::shared_ptr<Line> linesPtr);
-void ProcessMiscInput(GLFWwindow* window);
-void ProcessCameraInput(GLFWwindow* window, float cameraMoveSpeed, float* cameraPosxPtr, float* cameraPosyPtr);
-void ProcessLightningControlInput(GLFWwindow* window, int* lineCount, std::shared_ptr<Line> linesPtr);
-void RenderImGui(std::shared_ptr<float> rotationSpeed);
+void SetVPMatricies(Shader shader);
+int DefineBoltLines(Line* lboltPtr, std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr);
+void DefineBoltTextures(TextureBolt* tboltPtr, std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr);
+void ProcessMiscInput(GLFWwindow* window, bool* mouseEngaged, bool* firstButtonPress);
+void ProcessLightningControlInput(GLFWwindow* window, int* lineCount,
+	Line* lboltPtr, int methodChoice, TextureBolt* tboltPtr, std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr);
 void ConfigureWindow();
+void RenderImGui();
 GLFWwindow* CreateWindow();
 void InitImGui(GLFWwindow* window);
 
 int main() {
-	// Camera controls
-	float cameraPosx = 40;
-	float cameraPosy = 40;
-	float cameraPosz = 40;
-	float cameraAngle = 45;
-	float cameraMoveSpeed = 0.1f;
-
 	// seed
 	std::srand(std::time(NULL));
 	SetWidthAndHeight(SCR_WIDTH, SCR_HEIGHT);
@@ -82,16 +81,40 @@ int main() {
 		return -1;
 	}
 
-	// TODO: Allow Different methods of bolt generation to be chosen through GUI
-	// Bolt Lines ptr
-	std::shared_ptr<Line> linesPtr(new Line[2000], std::default_delete < Line[]>());
-	// draw lines here -------------------------
+	// Input
+	// ---------------
+	// callbacks
+	glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
+	glfwSetCursorPosCallback(window, mouse_callback);
+	glfwSetScrollCallback(window, scroll_callback);
+	// mouse capture
+	glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+	bool mouseEngaged = true;
+	bool firstMouseKeyPress = true;
+	// ---------------
+
+	// Bolt Objects
+	// ---------------
+	// Lines
+	Line boltLines[2000];
+	Line* lboltPtr = &boltLines[0];
+	// TextureBolts	- has the function to use textures but currenly only uses a color
+	TextureBolt* tboltPtr;
+	TextureBolt boltTextures[numSegmentsInPattern];
+	tboltPtr = &boltTextures[0];
+
+
+	// Lightning Pattern
+	// ---------------
+	// 2D array of points
+	std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr = GenerateLightningPattern(startPnt);
+	std::cout << "B: " << lightningPatternPtr.get()[7].x << ", " << lightningPatternPtr.get()[7].y << ", " << lightningPatternPtr.get()[7].z << std::endl;
 	SetLineArraySize(2000);
-	int lineCount = DefineBoltLines(vec3(400, 8000, 0), linesPtr);
-	//------------------------------------------
+	int lineCount = 0;
 
 	InitImGui(window);
 
+	glBindFramebuffer(GL_FRAMEBUFFER,0);
 	// render loop
 	while (!glfwWindowShouldClose(window)) {
 		// set background color
@@ -105,9 +128,11 @@ int main() {
 		SetLastFrame(currentFrame);
 
 		// input
-		ProcessMiscInput(window);
-		ProcessCameraInput(window, cameraMoveSpeed, &cameraPosx, &cameraPosy);
-		ProcessLightningControlInput(window, &lineCount, linesPtr);
+		// -----------------------
+		ProcessKeyboardInput(window);
+		ProcessMiscInput(window, &mouseEngaged, &firstMouseKeyPress);	// TODO: move GUI stuff into separate file
+		ProcessLightningControlInput(window, &lineCount, lboltPtr, methodChoice, tboltPtr, lightningPatternPtr);
+
 
 		double strikeDuration = 0.1;
 		// draw lines one by one over time
@@ -121,10 +146,10 @@ int main() {
 		mat4 view = lookAt(GetCameraPos(), GetCameraPos() + GetCameraFront(), GetCameraUp());
 		mat4 projection = glm::perspective(glm::radians(GetFOV()), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.0f);
 		for (int i = 0; i < numLinesToDraw; i++) {
-			if (i % 2 == 0) { linesPtr.get()[i].SetColor(vec3(1, 0, 1)); }
-			linesPtr.get()[i].SetProjection(projection);
-			linesPtr.get()[i].SetView(view);
-			linesPtr.get()[i].Draw();
+			if (i % 2 == 0) { lboltPtr[i].SetColor(vec3(1, 0, 1)); }
+			lboltPtr[i].SetProjection(projection);
+			lboltPtr[i].SetView(view);
+			lboltPtr[i].Draw();
 		}
 
 		// glfw: swap buffers and poll IO events
@@ -150,58 +175,83 @@ void SetVPMatricies(Shader shader) {
 	shader.SetMat4("projection", projection);
 }
 
-int DefineBoltLines(vec3 startPos, std::shared_ptr<Line> linesPtr) {
-	switch (methods[methodChoice]) {
-	case Naive:
-		return DefineBoltLinesNA(startPos, linesPtr);
-		break;
-	default:
-		return 0;
-		break;
+int DefineBoltLines(Line* lboltPtr, std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr) {
+	for (int i = 0; i < numSegmentsInPattern-1; i++) {
+		lboltPtr[i].Setup(lightningPatternPtr[i], lightningPatternPtr[i+1]);
+		//std::cout << "Point: " << i << " " << lightningPatternPtr[i].x << " " << lightningPatternPtr[i].y << " " << lightningPatternPtr[i].z << std::endl;
+	}
+	return numSegmentsInPattern;
+}
+
+void DefineBoltTextures(TextureBolt* tboltPtr, std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr) {
+	for (int i = 0; i < numSegmentsInPattern - 1; i++) {
+		tboltPtr[i].Setup(lightningPatternPtr[i], lightningPatternPtr[i+1]);
 	}
 }
 
 // Input Processing:
+// -------------------
 // ProcessMiscInput, process inputs relating to control of the application
-void ProcessMiscInput(GLFWwindow* window) {
+void ProcessMiscInput(GLFWwindow* window, bool* mouseEngaged, bool* firstButtonPress) {
 	if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
 		glfwSetWindowShouldClose(window, true);
-}
 
-// ProcessCameraInput, process inputs relating to control of the camera
-void ProcessCameraInput(GLFWwindow* window, float cameraMoveSpeed, float* cameraPosxPtr, float* cameraPosyPtr) {
-	// move camera position
-	if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) {
-		*cameraPosyPtr += cameraMoveSpeed;
+	if (glfwGetKey(window, GLFW_KEY_M) == GLFW_PRESS) {
+
+		if (*firstButtonPress) {
+			*firstButtonPress = false;
+
+			if (&mouseEngaged) {
+				*mouseEngaged = false;
+				glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+			}
+			else {
+				*mouseEngaged = true;
+				glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+			}
+
+		}
 	}
-	if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) {
-		*cameraPosyPtr -= cameraMoveSpeed;
-	}
-	if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) {
-		*cameraPosxPtr -= cameraMoveSpeed;
-	}
-	if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) {
-		*cameraPosxPtr += cameraMoveSpeed;
+	else if (glfwGetKey(window, GLFW_KEY_M) == GLFW_RELEASE) {
+		*firstButtonPress = true;
 	}
 }
 
 bool spaceHeld = false;
-
 // ProcessLightningControlInput, process inputs relating to control of the lightning
-void ProcessLightningControlInput(GLFWwindow* window, int* lineCount, std::shared_ptr<Line> linesPtr) {
-	// recalculate lines
+void ProcessLightningControlInput(GLFWwindow* window, int* lineCount,
+	Line* lboltPtr, int methodChoice, TextureBolt* tboltPtr, std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr) {
+
+	// recalculate lines	TODO: method choices should choose between lines and tbolts
 	if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS && !spaceHeld) {
 		std::cout << "New Strike" << std::endl;
-		*lineCount = DefineBoltLines(vec3(400, 8000, 0), linesPtr);
 		spaceHeld = true;
+		lightningPatternPtr = GenerateLightningPattern(glm::vec3(400, 8000, 0));
+		// Lines
+		*lineCount = DefineBoltLines(lboltPtr, lightningPatternPtr);
+		// Tbolts
+		DefineBoltTextures(tboltPtr, lightningPatternPtr);
 		strikeStartTime = glfwGetTime();
 	}
 	else if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_RELEASE) {
 		spaceHeld = false;
 	}
 }
+// -------------------
 
-// render imgui
+// GLFW
+// initialize and configure glfw
+void ConfigureWindow() {
+	glfwInit();
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+	glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE); // REMOVE IF ISSUE WITH MACS
+
+	glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GL_TRUE);
+}
+
+// GUI:
 void RenderImGui() {
 	ImGui_ImplOpenGL3_NewFrame();
 	ImGui_ImplGlfw_NewFrame();
@@ -221,17 +271,6 @@ void RenderImGui() {
 
 	ImGui::Render();
 	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-}
-
-// initialize and configure glfw
-void ConfigureWindow() {
-	glfwInit();
-	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-	glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE); // REMOVE IF ISSUE WITH MACS
-
-	glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GL_TRUE);
 }
 
 GLFWwindow* CreateWindow() {

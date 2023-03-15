@@ -16,10 +16,9 @@ void TextureBolt::Draw() {
 }
 
 // set up Vertex data and buffers
-void TextureBolt::Setup(glm::vec3 start, glm::vec3 end, int num) {
+void TextureBolt::Setup(glm::vec3 start, glm::vec3 end) {
 	startPoint = start;
 	endPoint = end;
-	boltNum = num;
 
 	// we do many calculations twice with this method - can be optimized 
 	// (the previous TextureBolt will have made the same calculations for

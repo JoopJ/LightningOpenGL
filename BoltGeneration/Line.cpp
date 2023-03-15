@@ -20,6 +20,8 @@ void Line::Setup(vec3 start, vec3 end) {
 	projection = glm::mat4(1.0f);
 	view = glm::mat4(1.0f);
 
+	std::cout << "(" << start.x << ", " << start.y << ", " << start.z << ")" << std::endl;
+
 	const char* vertexShaderSource = "#version 450 core\n"
 		"layout (location = 0) in vec3 aPos;\n"
 		"uniform mat4 projection;\n"
