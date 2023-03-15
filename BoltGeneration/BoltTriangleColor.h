@@ -1,19 +1,20 @@
 #pragma once
 
 #include <glm/glm.hpp>
+using glm::vec3;
 #include <glad/glad.h>
 
 #include "../FunctionLibrary.h"
 
-class TextureBolt {
+class BoltTriangleColor {
 private:
-	unsigned int VAO, VBO, EBO;
+	unsigned int VAO, VBO, EBO;	
 	float vertices[32];
 	int indices[6] = { 0, 1, 3, 1, 2, 3 };
 
-public: 
+public:
 	glm::vec3 color;
-	TextureBolt();	// called when Tbolt is created in array
+	BoltTriangleColor();
 	void Draw();
 	void Setup(glm::vec3 start, glm::vec3 end);
 };

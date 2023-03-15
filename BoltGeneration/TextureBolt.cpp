@@ -1,30 +1,28 @@
 #include "TextureBolt.h"
 
+// constructor
 TextureBolt::TextureBolt() {
 	color = glm::vec3(1, 1, 0);
 };
 
-
-/// <summary>
-/// Before this function is called, the EBO and texture for the bolt should
-/// be bound. The corrent shader program should also be in use.
-/// </summary>
 void TextureBolt::Draw() {
 	glBindVertexArray(VAO);
 	//glDrawArrays(GL_TRIANGLE_STRIP, 0, 6);
 	glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 }
 
-// set up Vertex data and buffers
+/// <summary>
+/// Must be called for very instance of this object before Draw()
+/// Sets up the vertices and buffers
+/// </summary>
+/// <param name="start"></param>
+/// <param name="end"></param>
 void TextureBolt::Setup(glm::vec3 start, glm::vec3 end) {
-	startPoint = start;
-	endPoint = end;
-
 	// we do many calculations twice with this method - can be optimized 
 	// (the previous TextureBolt will have made the same calculations for
 	// the start point of this one)
 	float offSet = 0.1;
-	float verticesSet[32] = {	// TODO: upgrade to 3D
+	float verticesSet[32] = {
 		// positions										// color						// texture coords
 		start.x+offSet, start.y+offSet, start.z + offSet,	color.x, color.y, color.z,		1.0, 1.0,	// top right
 		end.x+offSet,   end.y-offSet,	end.z + offSet,		color.x, color.y, color.z,		1.0, 0.0,	// bottom right
