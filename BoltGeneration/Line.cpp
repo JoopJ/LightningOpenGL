@@ -1,14 +1,8 @@
+// IMPROVEMENTS
+// it would be better to get all the vertex data from each line together and put them in one buffer instead of one buffer per line
+
+
 #include "Line.h"
-
-#include <vector>
-#include <glad/glad.h>
-#include <GLFW/glfw3.h>
-#define GLM_ENABLE_EXPERIMENTAL
-#include <glm/glm.hpp>
-
-using glm::vec3;
-using glm::mat4;
-using std::vector;
 
 // use setup function so Lines made in array can be initialized
 Line::Line() {};
@@ -23,13 +17,16 @@ void Line::Setup(vec3 start, vec3 end) {
 	startPoint = start;
 	endPoint = end;
 	lineColor = vec3(1, 1, 1);
+	projection = glm::mat4(1.0f);
+	view = glm::mat4(1.0f);
 
 	const char* vertexShaderSource = "#version 450 core\n"
 		"layout (location = 0) in vec3 aPos;\n"
-		"uniform mat4 MVP;\n"
+		"uniform mat4 projection;\n"
+		"uniform mat4 view;\n"
 		"void main()\n"
 		"{\n"
-		"   gl_Position = MVP * vec4(aPos.x, aPos.y, aPos.z, 1.0);\n"
+		"   gl_Position = projection * view * vec4(aPos.x, aPos.y, aPos.z, 1.0);\n"
 		"}\0";
 
 	const char* fragmentShaderSource = "#version 450 core\n"
@@ -64,27 +61,25 @@ void Line::Setup(vec3 start, vec3 end) {
 		end.x, end.y, end.z,
 	};
 
-	// genereate and 
+	// genereate, bind and initialize buffer's for bolt rendering
 	glGenVertexArrays(1, &VAO);
 	glGenBuffers(1, &VBO);
 	glBindVertexArray(VAO);
+	glBindBuffer(GL_ARRAY_BUFFER, VBO);	// bind the VBO to the GL_ARRAY_BUFFER target
+	glBufferData(GL_ARRAY_BUFFER, sizeof(vertices) * vertices.size(), vertices.data(), GL_STATIC_DRAW);	// copy the vertex data into the currently bound Array Buffer (VBO at this moment)
+	/* TODO: Maybe need to change to DYNAMIC_DRAW, not sure if it's changed frequently enough tho.
+	GL_STREAM_DRAW: the data is set only onceand used by the GPU at most a few times.
+	GL_STATIC_DRAW: the data is set only onceand used many times.
+	GL_DYNAMIC_DRAW: the data is changed a lotand used many times.*/
 
-	// bind and initialize buffer
-	glBindBuffer(GL_ARRAY_BUFFER, VBO);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(vertices) * vertices.size(), vertices.data(), GL_STATIC_DRAW);
 
-	// define and enable array
+	// define and enable array (VAO at this moment)
 	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
 	glEnableVertexAttribArray(0);
 
-	// unbind
+	// unbind both buffers
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 	glBindVertexArray(0);
-}
-
-int Line::SetMVP(mat4 mvp) {
-	MVP = mvp;
-	return 1;
 }
 
 int Line::SetColor(vec3 color) {
@@ -92,28 +87,31 @@ int Line::SetColor(vec3 color) {
 	return 1;
 }
 
+void Line::SetProjection(glm::mat4 p) {
+	projection = p;
+}
+
+void Line::SetView(glm::mat4 v) {
+	view = v;
+}
+
 int Line::Draw() {
-	// installs program as part of current rendering state
+	// shader program should be set before calling this function
 	glUseProgram(shaderProgram);
 
 	// create MVP and color matrixes
-	glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "MVP"), 1, GL_FALSE, &MVP[0][0]);
+	glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "projection"), 1, GL_FALSE, &projection[0][0]);
+	glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "view"), 1, GL_FALSE, &view[0][0]);
 	glUniform3fv(glGetUniformLocation(shaderProgram, "color"), 1, &lineColor[0]);
 
 	// Actually draw to the matrix
-	glBindVertexArray(VAO);
+	glBindVertexArray(VAO);	// bind back to VAO that we put the VBO data in, in the for of a vertex array
 	glDrawArrays(GL_LINES, 0, 2);
 	return -1;
-}
-
-int Line::SetPoints(vec3 start, vec3 end) {
-	startPoint = start;
-	endPoint = end;
-	return 1;
 }
 
 Line::~Line() {
 	glDeleteVertexArrays(1, &VAO);
 	glDeleteBuffers(1, &VBO);
-	glDeleteProgram(shaderProgram);
+	//glDeleteProgram(shaderProgram);
 }

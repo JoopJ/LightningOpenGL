@@ -35,7 +35,9 @@ ImGui is used for the GUI which allows editting of various variables used to gen
 // other files
 #include "BoltGeneration/Line.h"
 #include "BoltGeneration/NaiveApproach.h"
+#include "Shader/Shader.h"
 #include "FunctionLibrary.h"
+#include "CameraControl.h"
 
 using glm::vec3;
 using glm::mat4;
@@ -43,27 +45,8 @@ using std::vector;
 using glm::radians;
 using glm::lookAt;
 
-const unsigned int SCR_WIDTH = 1000;
-const unsigned int SCR_HEIGHT = 800;
-
-float lastX = SCR_WIDTH / 2.0f;
-float lastY = SCR_HEIGHT / 2.0f;
-
-// time for camera
-float deltaTime = 0.0f;
-float lastFrame = 0.0f;
 // time for the lightning
 double strikeStartTime;
-
-class Camera {
-public:
-	vec3 position;
-	Camera() {
-		position = vec3(0, 0, 0);
-	}
-};
-Camera camera;
-
 
 enum Method { Naive, ParticalSystem };
 Method methods[2] = { Naive, ParticalSystem };
@@ -99,14 +82,6 @@ int main() {
 		return -1;
 	}
 
-	// camera and projection setup
-	camera.position = vec3(cameraPosx, cameraPosy, cameraPosz);
-	glm::mat4 projection = glm::perspective(glm::radians(cameraAngle), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.0f);
-
-	float angle = 0.0f;
-	// shared pointer, so it can be passed to the imgui window function
-	std::shared_ptr<float> rotationSpeed(new float(30.0f), std::default_delete<float>());
-
 	// TODO: Allow Different methods of bolt generation to be chosen through GUI
 	// Bolt Lines ptr
 	std::shared_ptr<Line> linesPtr(new Line[2000], std::default_delete < Line[]>());
@@ -123,9 +98,11 @@ int main() {
 		glClearColor(0.0, 0.0, 0.0, 1.0);
 		glClear(GL_COLOR_BUFFER_BIT);
 
-		// keep time for rotation speed
-		float currentFrame = (float)glfwGetTime();
-		deltaTime = currentFrame - lastFrame;
+		// pre-frame time logic
+		// -----------------------
+		float currentFrame = static_cast<float>(glfwGetTime());
+		SetDeltaTime(currentFrame - GetLastFrame());
+		SetLastFrame(currentFrame);
 
 		// input
 		ProcessMiscInput(window);
@@ -140,19 +117,15 @@ int main() {
 			std::cout << numLinesToDraw << std::endl;
 		}
 
-		// update camera position(rotating)
-		angle = deltaTime * *rotationSpeed;
-		camera.position = vec3(cameraPosx * cos(radians(angle)), cameraPosy, cameraPosz * sin(radians(angle)));
-		mat4 view = lookAt(camera.position, vec3(0, 0, 0), vec3(0, 1, 0));
 
-		// draw lines
+		mat4 view = lookAt(GetCameraPos(), GetCameraPos() + GetCameraFront(), GetCameraUp());
+		mat4 projection = glm::perspective(glm::radians(GetFOV()), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.0f);
 		for (int i = 0; i < numLinesToDraw; i++) {
-			linesPtr.get()[i].SetMVP(projection * view);
+			if (i % 2 == 0) { linesPtr.get()[i].SetColor(vec3(1, 0, 1)); }
+			linesPtr.get()[i].SetProjection(projection);
+			linesPtr.get()[i].SetView(view);
 			linesPtr.get()[i].Draw();
-			//std::cout << "Line " << i << " drawn" << std::endl;
 		}
-
-		RenderImGui(rotationSpeed);
 
 		// glfw: swap buffers and poll IO events
 		glfwSwapBuffers(window);
@@ -167,6 +140,14 @@ int main() {
 	//glfw: terminate, clearing all previously allocated GLFW resources.
 	glfwTerminate();
 	return 0;
+}
+
+void SetVPMatricies(Shader shader) {
+	// camera and projection setup
+	mat4 view = lookAt(GetCameraPos(), GetCameraPos() + GetCameraFront(), GetCameraUp());
+	shader.SetMat4("view", view);
+	mat4 projection = glm::perspective(glm::radians(GetFOV()), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.0f);
+	shader.SetMat4("projection", projection);
 }
 
 int DefineBoltLines(vec3 startPos, std::shared_ptr<Line> linesPtr) {
@@ -221,7 +202,7 @@ void ProcessLightningControlInput(GLFWwindow* window, int* lineCount, std::share
 }
 
 // render imgui
-void RenderImGui(std::shared_ptr<float> rotationSpeed) {
+void RenderImGui() {
 	ImGui_ImplOpenGL3_NewFrame();
 	ImGui_ImplGlfw_NewFrame();
 	ImGui::NewFrame();
@@ -232,8 +213,6 @@ void RenderImGui(std::shared_ptr<float> rotationSpeed) {
 
 	// Camera Control window
 	ImGui::Begin("Options");
-	ImGui::Text("Camera options:");
-	ImGui::SliderFloat("rotationSpeed", rotationSpeed.get(), 0.0f, 100.0f);
 	ImGui::Text("Lightning Options:");
 	ImGui::SliderInt("Bolt Generation Method", &methodChoice, 0, 1);
 	ImGui::Text(("Current Method: " + methodNames[methodChoice]).c_str());
