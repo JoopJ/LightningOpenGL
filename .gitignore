@@ -30,3 +30,15 @@
 *.exe
 *.out
 *.app
+
+# Directories
+imgui/
+x64/
+.vs/
+
+# Specific Files
+LightningOpenGL.sln
+LightningOpenGL.vcxproj
+LightningOpenGL.vcxproj.filters
+LightningOpenGL.vcxproj.user
+

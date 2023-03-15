@@ -70,6 +70,105 @@ Method methods[2] = { Naive, ParticalSystem };
 std::string methodNames[2] = { "Naive", "Partical System" };
 int methodChoice = 0;
 
+// function prototypes
+int DefineBoltLines(vec3 startPos, std::shared_ptr<Line> linesPtr);
+void ProcessMiscInput(GLFWwindow* window);
+void ProcessCameraInput(GLFWwindow* window, float cameraMoveSpeed, float* cameraPosxPtr, float* cameraPosyPtr);
+void ProcessLightningControlInput(GLFWwindow* window, int* lineCount, std::shared_ptr<Line> linesPtr);
+void RenderImGui(std::shared_ptr<float> rotationSpeed);
+void ConfigureWindow();
+GLFWwindow* CreateWindow();
+void InitImGui(GLFWwindow* window);
+
+int main() {
+	// Camera controls
+	float cameraPosx = 40;
+	float cameraPosy = 40;
+	float cameraPosz = 40;
+	float cameraAngle = 45;
+	float cameraMoveSpeed = 0.1f;
+
+	// seed
+	std::srand(std::time(NULL));
+	SetWidthAndHeight(SCR_WIDTH, SCR_HEIGHT);
+
+	ConfigureWindow();
+	GLFWwindow* window = CreateWindow();
+
+	if (window == NULL) {	// exit if window creation fails
+		return -1;
+	}
+
+	// camera and projection setup
+	camera.position = vec3(cameraPosx, cameraPosy, cameraPosz);
+	glm::mat4 projection = glm::perspective(glm::radians(cameraAngle), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.0f);
+
+	float angle = 0.0f;
+	// shared pointer, so it can be passed to the imgui window function
+	std::shared_ptr<float> rotationSpeed(new float(30.0f), std::default_delete<float>());
+
+	// TODO: Allow Different methods of bolt generation to be chosen through GUI
+	// Bolt Lines ptr
+	std::shared_ptr<Line> linesPtr(new Line[2000], std::default_delete < Line[]>());
+	// draw lines here -------------------------
+	SetLineArraySize(2000);
+	int lineCount = DefineBoltLines(vec3(400, 8000, 0), linesPtr);
+	//------------------------------------------
+
+	InitImGui(window);
+
+	// render loop
+	while (!glfwWindowShouldClose(window)) {
+		// set background color
+		glClearColor(0.0, 0.0, 0.0, 1.0);
+		glClear(GL_COLOR_BUFFER_BIT);
+
+		// keep time for rotation speed
+		float currentFrame = (float)glfwGetTime();
+		deltaTime = currentFrame - lastFrame;
+
+		// input
+		ProcessMiscInput(window);
+		ProcessCameraInput(window, cameraMoveSpeed, &cameraPosx, &cameraPosy);
+		ProcessLightningControlInput(window, &lineCount, linesPtr);
+
+		double strikeDuration = 0.1;
+		// draw lines one by one over time
+		double currentTime = glfwGetTime();
+		int numLinesToDraw = std::min((int)((currentTime - strikeStartTime) / (strikeDuration / lineCount)), lineCount);
+		if (numLinesToDraw != lineCount) {
+			std::cout << numLinesToDraw << std::endl;
+		}
+
+		// update camera position(rotating)
+		angle = deltaTime * *rotationSpeed;
+		camera.position = vec3(cameraPosx * cos(radians(angle)), cameraPosy, cameraPosz * sin(radians(angle)));
+		mat4 view = lookAt(camera.position, vec3(0, 0, 0), vec3(0, 1, 0));
+
+		// draw lines
+		for (int i = 0; i < numLinesToDraw; i++) {
+			linesPtr.get()[i].SetMVP(projection * view);
+			linesPtr.get()[i].Draw();
+			//std::cout << "Line " << i << " drawn" << std::endl;
+		}
+
+		RenderImGui(rotationSpeed);
+
+		// glfw: swap buffers and poll IO events
+		glfwSwapBuffers(window);
+		glfwPollEvents();
+	}
+
+	// imgui: shutdown and cleanup
+	ImGui_ImplOpenGL3_Shutdown();
+	ImGui_ImplGlfw_Shutdown();
+	ImGui::DestroyContext();
+
+	//glfw: terminate, clearing all previously allocated GLFW resources.
+	glfwTerminate();
+	return 0;
+}
+
 int DefineBoltLines(vec3 startPos, std::shared_ptr<Line> linesPtr) {
 	switch (methods[methodChoice]) {
 	case Naive:
@@ -179,93 +278,4 @@ void InitImGui(GLFWwindow* window) {
 	ImGui::StyleColorsDark();
 	ImGui_ImplGlfw_InitForOpenGL(window, true);
 	ImGui_ImplOpenGL3_Init("#version 460");
-}
-
-int main() {
-	// Camera controls
-	float cameraPosx = 40;
-	float cameraPosy = 40;
-	float cameraPosz = 40;
-	float cameraAngle = 45;
-	float cameraMoveSpeed = 0.1f;
-
-	// seed
-	std::srand(std::time(NULL));
-	SetWidthAndHeight(SCR_WIDTH, SCR_HEIGHT);
-	
-	ConfigureWindow();
-	GLFWwindow* window = CreateWindow();
-
-	if (window == NULL) {	// exit if window creation fails
-		return -1;
-	}
-
-	// camera and projection setup
-	camera.position = vec3(cameraPosx, cameraPosy, cameraPosz);
-	glm::mat4 projection = glm::perspective(glm::radians(cameraAngle), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.0f);
-
-	float angle = 0.0f;
-	// shared pointer, so it can be passed to the imgui window function
-	std::shared_ptr<float> rotationSpeed(new float(30.0f), std::default_delete<float>());
-
-	// TODO: Allow Different methods of bolt generation to be chosen through GUI
-	// Bolt Lines ptr
-	std::shared_ptr<Line> linesPtr(new Line[2000], std::default_delete < Line[]>());
-	// draw lines here -------------------------
-	SetLineArraySize(2000);
-	int lineCount = DefineBoltLines(vec3(400, 8000, 0), linesPtr);
-	//------------------------------------------
-
-	InitImGui(window);
-
-	// render loop
-	while (!glfwWindowShouldClose(window)) {
-		// set background color
-		glClearColor(0.0, 0.0, 0.0, 1.0);
-		glClear(GL_COLOR_BUFFER_BIT);
-
-		// keep time for rotation speed
-		float currentFrame = (float)glfwGetTime();
-		deltaTime = currentFrame - lastFrame;
-
-		// input
-		ProcessMiscInput(window);
-		ProcessCameraInput(window, cameraMoveSpeed, &cameraPosx, &cameraPosy);
-		ProcessLightningControlInput(window, &lineCount, linesPtr);
-
-		double strikeDuration = 0.1;
-		// draw lines one by one over time
-		double currentTime = glfwGetTime();
-		int numLinesToDraw = std::min((int)((currentTime - strikeStartTime) / (strikeDuration/lineCount)), lineCount);
-		if (numLinesToDraw != lineCount) {
-			std::cout << numLinesToDraw << std::endl;
-		}
-
-		// update camera position(rotating)
-		angle = deltaTime * *rotationSpeed;
-		camera.position = vec3(cameraPosx * cos(radians(angle)), cameraPosy, cameraPosz * sin(radians(angle)));
-		mat4 view = lookAt(camera.position, vec3(0, 0, 0), vec3(0, 1, 0));
-
-		// draw lines
-		for (int i = 0; i < numLinesToDraw; i++) {
-			linesPtr.get()[i].SetMVP(projection * view);
-			linesPtr.get()[i].Draw();
-			//std::cout << "Line " << i << " drawn" << std::endl;
-		}
-
-		RenderImGui(rotationSpeed);
-
-		// glfw: swap buffers and poll IO events
-		glfwSwapBuffers(window);
-		glfwPollEvents();
-	}
-
-	// imgui: shutdown and cleanup
-	ImGui_ImplOpenGL3_Shutdown();
-	ImGui_ImplGlfw_Shutdown();
-	ImGui::DestroyContext();
-
-	//glfw: terminate, clearing all previously allocated GLFW resources.
-	glfwTerminate();
-	return 0;
 }

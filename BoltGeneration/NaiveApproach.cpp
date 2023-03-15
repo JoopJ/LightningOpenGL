@@ -53,7 +53,7 @@ vec3 DefineLine(std::shared_ptr<Line> linesPtr, vec3 startPos, int i, int* lineC
 }
 
 // Generates the lightning pattern in an array of lines, returns the number of Line objs in the array
-int DefineLightningLines(vec3 startPos, std::shared_ptr<Line> linesPtr) {
+int DefineBoltLinesNA(vec3 startPos, std::shared_ptr<Line> linesPtr) {
 	std::cout << "Lines array size: " << linesArraySize << std::endl;
 	int lineCount = 0;
 	int* lineCountPtr = &lineCount;
