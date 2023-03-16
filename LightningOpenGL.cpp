@@ -36,7 +36,6 @@ ImGui is used for the GUI which allows editting of various variables used to gen
 #include "BoltGeneration/Line.h"
 #include "BoltGeneration/TextureBolt.h"
 #include "BoltGeneration/BoltTriangleColor.h"
-#include "BoltGeneration/NaiveApproach.h"
 #include "BoltGeneration/LightningPatterns.h"
 #include "Shader/Shader.h"
 #include "FunctionLibrary.h"
@@ -116,7 +115,6 @@ int main() {
 	// ---------------
 	// 2D array of points
 	std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr;
-	SetLineArraySize(2000);
 	// initial setting of pattern
 	lightningPatternPtr = GenerateLightningPattern(glm::vec3(400, 8000, 0));
 	switch (methods[methodChoice]) {
