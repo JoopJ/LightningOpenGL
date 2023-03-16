@@ -22,9 +22,12 @@ Esc - Exit
 
 ## GUI
 Methods: changes the method used to render the lightning bolt
+
 Line - uses colored Line primitives
+
 Triangle Color - uses coloured triangle primitives
 
 ### TODO:
 - Render to a framebuffer then to screen quad for postprocessing
+
 - Gaussian Blur
