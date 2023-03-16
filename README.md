@@ -13,6 +13,7 @@ An exploration of the methods used to create realistic looking and behaving ligh
 Space - Recalculates the lightning pattern.
 
 W/A/S/D - Move camera
+
 Mouse - Rotate camera angle
 
 M - Toggle mouse camera movement
