@@ -20,7 +20,7 @@ void LoadTextures() {
 
 // Get the project base path
 std::string ProjectBasePath() {
-	// Current Path: "..\ProjectBaseS\x64\Debug" - default path of exe
+	//  "..\ProjectBase\x64\Debug" - sometimes path of exe
 	// get project path by removing "\x64\Debug" from current path
 	std::string projectBase = std::filesystem::current_path().string();
 	projectBase.erase(projectBase.end() - 10, projectBase.end());

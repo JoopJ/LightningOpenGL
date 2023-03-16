@@ -22,7 +22,9 @@ glm::vec3 GetCameraUp();
 float GetFOV();
 float GetDeltaTime();
 float GetLastFrame();
+bool GetMouseEngaged();
 
 // setters
 void SetDeltaTime(float dt);
 void SetLastFrame(float lf);
+void SetMouseEngaged(bool me);

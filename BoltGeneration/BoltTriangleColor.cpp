@@ -7,8 +7,8 @@ BoltTriangleColor::BoltTriangleColor() {
 
 void BoltTriangleColor::Draw() {
 	glBindVertexArray(VAO);
-	glDrawArrays(GL_TRIANGLES, 0, 6);
-	//glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+	//glDrawArrays(GL_TRIANGLES, 0, 6);
+	glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 }
 
 /// <summary>
@@ -20,7 +20,7 @@ void BoltTriangleColor::Draw() {
 void BoltTriangleColor::Setup(vec3 start, vec3 end) {
 	// vertices
 	float offSet = 0.1;
-	float verticesSet[32] = {
+	float verticesSet[24] = {
 		// positions											// color
 		start.x + offSet, start.y + offSet, start.z + offSet,	color.x, color.y, color.z,	// top right
 		end.x + offSet,   end.y - offSet,	end.z + offSet,		color.x, color.y, color.z,	// bottom right

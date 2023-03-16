@@ -53,19 +53,20 @@ double strikeStartTime;
 // lightning start position
 const vec3 startPnt = vec3(400,8000, 0);
 
-enum Method { Naive, ParticalSystem };
-Method methods[2] = { Naive, ParticalSystem };
-std::string methodNames[2] = { "Naive", "Partical System" };
-int methodChoice = 0;
+enum Method { Lines, TrianglesColor };
+Method methods[2] = { Lines, TrianglesColor };
+const char* methodNames[2] = { "Line", "TriangleColor" };
+int methodChoice = 1;
 
 // function prototypes
 void SetMVPMatricies(Shader shader, mat4 view, mat4 projection);
 int DefineBoltLines(Line* lboltPtr, std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr);
 void DefineBoltTextures(TextureBolt* tboltPtr, std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr);
+void DefineBoltColors(BoltTriangleColor* cboltPtr, std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr);
 void DrawBoltTriangleColor(BoltTriangleColor* cboltPtr);
-void ProcessMiscInput(GLFWwindow* window, bool* mouseEngaged, bool* firstButtonPress);
+void ProcessMiscInput(GLFWwindow* window, bool* firstButtonPress);
 void ProcessLightningControlInput(GLFWwindow* window, int* lineCount,
-	Line* lboltPtr, int methodChoice, TextureBolt* tboltPtr, std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr);
+	Line* lboltPtr, BoltTriangleColor* cboltPtr, std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr);
 void ConfigureWindow();
 void RenderImGui();
 GLFWwindow* CreateWindow();
@@ -92,7 +93,6 @@ int main() {
 	glfwSetScrollCallback(window, scroll_callback);
 	// mouse capture
 	glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-	bool mouseEngaged = true;
 	bool firstMouseKeyPress = true;
 	// ---------------
 
@@ -117,6 +117,16 @@ int main() {
 	// 2D array of points
 	std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr;
 	SetLineArraySize(2000);
+	// initial setting of pattern
+	lightningPatternPtr = GenerateLightningPattern(glm::vec3(400, 8000, 0));
+	switch (methods[methodChoice]) {
+	case Lines:
+		lineCount = DefineBoltLines(lboltPtr, lightningPatternPtr);
+		break;
+	case TrianglesColor:
+		DefineBoltColors(cboltPtr, lightningPatternPtr);
+		break;
+	}
 	// ---------------
 
 	// Shaders
@@ -125,6 +135,9 @@ int main() {
 
 	std::string vertexPath = projectBase + "\\Shader\\bolt_triangle_color.vs";
 	std::string fragmentPath = projectBase + "\\Shader\\bolt_triangle_color.fs";
+
+	//std::cout << "Vertex Path: " << vertexPath << std::endl;
+	//std::cout << "Fragment Path: " << fragmentPath << std::endl;
 
 	Shader boltShaderColor(vertexPath.c_str(), fragmentPath.c_str());
 	// ---------------
@@ -150,10 +163,10 @@ int main() {
 		// input
 		// -----------------------
 		ProcessKeyboardInput(window);
-		ProcessMiscInput(window, &mouseEngaged, &firstMouseKeyPress);	// TODO: move GUI stuff into separate file
-		ProcessLightningControlInput(window, &lineCount, lboltPtr, methodChoice, tboltPtr, lightningPatternPtr);
+		ProcessMiscInput(window, &firstMouseKeyPress);	// TODO: move GUI stuff into separate file
+		ProcessLightningControlInput(window, &lineCount, lboltPtr, cboltPtr, lightningPatternPtr);
 
-		// Render
+		// Render Lightning
 		// -----------
 		// 
 		// MVP (no model's atm)
@@ -169,21 +182,29 @@ int main() {
 			std::cout << numLinesToDraw << std::endl;
 		}
 		*/
-
-		// Line Bolt
-		for (int i = 0; i < lineCount; i++) {
-			// alternate color, useful to see structure
-			if (i % 2 == 0) { lboltPtr[i].SetColor(vec3(1, 0, 1)); }
-			lboltPtr[i].SetProjection(projection);
-			lboltPtr[i].SetView(view);
-			lboltPtr[i].Draw();
+		switch (methods[methodChoice]) {
+		case Lines:
+			// Line Bolt
+			for (int i = 0; i < lineCount; i++) {
+				// alternate color, useful to see structure
+				if (i % 2 == 0) { lboltPtr[i].SetColor(vec3(1, 0, 1)); }
+				lboltPtr[i].SetProjection(projection);
+				lboltPtr[i].SetView(view);
+				lboltPtr[i].Draw();
+			}
+			break;
+		case TrianglesColor:
+			// Color Triangle Bolt
+			boltShaderColor.Use();
+			SetMVPMatricies(boltShaderColor, view, projection);
+			DrawBoltTriangleColor(cboltPtr);
+			break;
 		}
-
-		// Color Triangle Bolt
-		boltShaderColor.Use();
-		SetMVPMatricies(boltShaderColor, view, projection);
-		DrawBoltTriangleColor(cboltPtr);
 		// ---------------
+		// 
+		// Render GUI
+		// ---------------
+		RenderImGui();
 
 		// glfw: swap buffers and poll IO events
 		glfwSwapBuffers(window);
@@ -240,7 +261,7 @@ void DrawBoltTriangleColor(BoltTriangleColor* cboltPtr) {
 // Input Processing:
 // -------------------
 // ProcessMiscInput, process inputs relating to control of the application
-void ProcessMiscInput(GLFWwindow* window, bool* mouseEngaged, bool* firstButtonPress) {
+void ProcessMiscInput(GLFWwindow* window, bool* firstButtonPress) {
 	if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
 		glfwSetWindowShouldClose(window, true);
 
@@ -249,12 +270,12 @@ void ProcessMiscInput(GLFWwindow* window, bool* mouseEngaged, bool* firstButtonP
 		if (*firstButtonPress) {
 			*firstButtonPress = false;
 
-			if (&mouseEngaged) {
-				*mouseEngaged = false;
+			if (GetMouseEngaged()) {
+				SetMouseEngaged(false);
 				glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
 			}
 			else {
-				*mouseEngaged = true;
+				SetMouseEngaged(true);
 				glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 			}
 
@@ -268,17 +289,22 @@ void ProcessMiscInput(GLFWwindow* window, bool* mouseEngaged, bool* firstButtonP
 bool spaceHeld = false;
 // ProcessLightningControlInput, process inputs relating to control of the lightning
 void ProcessLightningControlInput(GLFWwindow* window, int* lineCount,
-	Line* lboltPtr, int methodChoice, TextureBolt* tboltPtr, std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr) {
+	Line* lboltPtr, BoltTriangleColor* cboltPtr, std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr) {
 
 	// recalculate lines	TODO: method choices should choose between lines and tbolts
 	if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS && !spaceHeld) {
 		std::cout << "New Strike" << std::endl;
 		spaceHeld = true;
+
 		lightningPatternPtr = GenerateLightningPattern(glm::vec3(400, 8000, 0));
-		// Lines
-		*lineCount = DefineBoltLines(lboltPtr, lightningPatternPtr);
-		// Tbolts
-		DefineBoltTextures(tboltPtr, lightningPatternPtr);
+		switch (methods[methodChoice]) {
+		case Lines:
+			*lineCount = DefineBoltLines(lboltPtr, lightningPatternPtr);
+			break;
+		case TrianglesColor:
+			DefineBoltColors(cboltPtr, lightningPatternPtr);
+			break;
+		}
 		strikeStartTime = glfwGetTime();
 	}
 	else if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_RELEASE) {
@@ -305,15 +331,13 @@ void RenderImGui() {
 	ImGui_ImplGlfw_NewFrame();
 	ImGui::NewFrame();
 
-	ImGui::Begin("Lightning");
-
-	GUINaiveApproach();
+	//ImGui::Begin("Lightning");
+	//GUINaiveApproach();
 
 	// Camera Control window
 	ImGui::Begin("Options");
 	ImGui::Text("Lightning Options:");
-	ImGui::SliderInt("Bolt Generation Method", &methodChoice, 0, 1);
-	ImGui::Text(("Current Method: " + methodNames[methodChoice]).c_str());
+	ImGui::Combo("Methods", &methodChoice, methodNames, IM_ARRAYSIZE(methodNames));	// dosen't work
 
 	ImGui::End();
 

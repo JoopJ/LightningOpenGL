@@ -9,7 +9,7 @@ using glm::vec3;
 class BoltTriangleColor {
 private:
 	unsigned int VAO, VBO, EBO;	
-	float vertices[32];
+	float vertices[24];
 	int indices[6] = { 0, 1, 3, 1, 2, 3 };
 
 public:
