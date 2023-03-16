@@ -18,6 +18,8 @@ Mouse - Rotate camera angle
 
 M - Toggle mouse camera movement
 
+Esc - Exit
+
 ## GUI
 Methods: changes the method used to render the lightning bolt
 Line - uses colored Line primitives
