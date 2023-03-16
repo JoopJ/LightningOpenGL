@@ -17,8 +17,6 @@ public:
 	// constructor generates the shader on the fly
 	// ------------------------------------------------------------------------
 	Shader(const char* vertexPath, const char* fragmentPath) {
-		//const char* path = "C:\_THINGS\Programming\Dissertation\LightningOpenGL\Shaders";
-
 		// 1. retrieve the vertex/fragment source code from filePath
 		std::string vertexCode;
 		std::string fragmentCode;

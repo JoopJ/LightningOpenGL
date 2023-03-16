@@ -13,7 +13,6 @@ std::shared_ptr<glm::vec3[numSegmentsInPattern]> GenerateLightningPattern(glm::v
 		startPnt = NextPoint(startPnt);
 		patternPtr.get()[i] = ConvertWorldToScreen(startPnt);
 	}
-	std::cout << "A: " << patternPtr.get()[7].x << ", " << patternPtr.get()[7].y << "," << patternPtr.get()[7].z << std::endl;;
 
 	return patternPtr;
 }

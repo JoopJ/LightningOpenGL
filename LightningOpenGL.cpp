@@ -30,7 +30,7 @@ ImGui is used for the GUI which allows editting of various variables used to gen
 #include <GLFW/glfw3.h>
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp>\
+#include <glm/gtc/matrix_transform.hpp>
 
 // other files
 #include "BoltGeneration/Line.h"
@@ -133,21 +133,83 @@ int main() {
 	// ---------------
 	std::string projectBase = ProjectBasePath();
 
-	std::string vertexPath = projectBase + "\\Shader\\bolt_triangle_color.vs";
-	std::string fragmentPath = projectBase + "\\Shader\\bolt_triangle_color.fs";
+	std::string boltColorVertexPath = projectBase + "\\Shader\\bolt_triangle_color.vs";
+	std::string boltColorFragmentPath = projectBase + "\\Shader\\bolt_triangle_color.fs";
+
+	std::string screenVertexPath = projectBase + "\\Shader\\screen.vs";
+	std::string screenFragmentPath = projectBase + "\\Shader\\screen.fs";
 
 	//std::cout << "Vertex Path: " << vertexPath << std::endl;
 	//std::cout << "Fragment Path: " << fragmentPath << std::endl;
 
-	Shader boltShaderColor(vertexPath.c_str(), fragmentPath.c_str());
+	Shader boltShaderColor(boltColorVertexPath.c_str(), boltColorFragmentPath.c_str());
+	Shader screenShader(screenVertexPath.c_str(), screenFragmentPath.c_str());
 	// ---------------
 
 	// Textures
 	// ---------------
-	LoadTexture("C:/_THINGS/Programming/Dissertation/LightningOpenGL/triangle.png");
+	// LoadTexture("");
 	// ---------------
 
+
+	// Postprocessing
+	// ---------------
+	// framebuffer object
+	unsigned int fbo;
+	glGenFramebuffers(1, &fbo);
+	glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+	
+	// texture color buffer object
+	unsigned int tcbo;
+	// genereate and attach to framebuffer object (fbo)
+	glGenTextures(1, &tcbo);
+	glBindTexture(GL_TEXTURE_2D, tcbo);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, SCR_WIDTH, SCR_HEIGHT, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, tcbo, 0);
+
+	// depth and stencil buffer object
+	unsigned int rbo; // can be a renderbuffer object as we don't need to sample from it
+	glGenRenderbuffers(1, &rbo);
+	glBindRenderbuffer(GL_RENDERBUFFER, rbo);
+	// allocate storage and unbind
+	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, SCR_WIDTH, SCR_HEIGHT);
+	glBindRenderbuffer(GL_RENDERBUFFER, 0);
+	// attach to the framebuffer object (fbo)
+	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, rbo);
+
+	// check fbo is complete
+	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+		std::cout << "ERROR::FRAMEBUFFER:: Framebuffer is not complete!" << std::endl;
+	}
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
 	glBindFramebuffer(GL_FRAMEBUFFER,0);
+
+	// screen quad VAO
+	float quadVertices[] = {	// fills whole screen in NDC;
+		// positions   // texCoords
+		-1.0f,  1.0f,  0.0f, 1.0f,
+		-1.0f, -1.0f,  0.0f, 0.0f,
+		 1.0f, -1.0f,  1.0f, 0.0f,
+
+		-1.0f,  1.0f,  0.0f, 1.0f,
+		 1.0f, -1.0f,  1.0f, 0.0f,
+		 1.0f,  1.0f,  1.0f, 1.0f
+	};
+	unsigned int quadVAO, quadVBO;
+	glGenVertexArrays(1, &quadVAO);
+	glGenBuffers(1, &quadVBO);
+	glBindVertexArray(quadVAO);
+	glBindBuffer(GL_ARRAY_BUFFER, quadVBO);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), &quadVertices, GL_STATIC_DRAW);
+	glVertexAttribPointer(0, 2 , GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
+	glEnableVertexAttribArray(0);
+	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
+	glEnableVertexAttribArray(1);
+	// ----------------
+
 	// render loop
 	while (!glfwWindowShouldClose(window)) {
 		// set background color
@@ -182,6 +244,13 @@ int main() {
 			std::cout << numLinesToDraw << std::endl;
 		}
 		*/
+		// first pass, to framebuffer object (fbo)
+		glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+		glClearColor(0.0, 0.0, 0.0, 1.0);
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+		glEnable(GL_DEPTH_TEST);
+
+		// Drawing
 		switch (methods[methodChoice]) {
 		case Lines:
 			// Line Bolt
@@ -200,6 +269,17 @@ int main() {
 			DrawBoltTriangleColor(cboltPtr);
 			break;
 		}
+		// second pass, to default framebuffer
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+		glClearColor(0.0, 0.5, 1.0, 1.0);
+		glClear(GL_COLOR_BUFFER_BIT);
+		glDisable(GL_DEPTH_TEST);
+
+		screenShader.Use();
+		glBindVertexArray(quadVAO);
+		glBindTexture(GL_TEXTURE_2D, tcbo);
+		glDrawArrays(GL_TRIANGLES, 0, 6);
+
 		// ---------------
 		// 
 		// Render GUI
@@ -210,6 +290,8 @@ int main() {
 		glfwSwapBuffers(window);
 		glfwPollEvents();
 	}
+
+	glDeleteBuffers(1, &fbo);
 
 	// imgui: shutdown and cleanup
 	ImGui_ImplOpenGL3_Shutdown();
