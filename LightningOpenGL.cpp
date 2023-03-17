@@ -51,6 +51,10 @@ using glm::lookAt;
 double strikeStartTime;
 // lightning start position
 const vec3 startPnt = vec3(400,8000, 0);
+// post processing
+int amount = 1;
+// light
+vec3 lightPos(1.2f, 1.0f, 2.0f);
 
 enum Method { Lines, TrianglesColor };
 Method methods[2] = { Lines, TrianglesColor };
@@ -58,7 +62,8 @@ const char* methodNames[2] = { "Line", "TriangleColor" };
 int methodChoice = 1;
 
 // function prototypes
-void SetMVPMatricies(Shader shader, mat4 view, mat4 projection);
+void SetMVPMatricies(Shader shader, mat4 model, mat4 view, mat4 porjection);
+void SetVPMatricies(Shader shader, mat4 view, mat4 projection);
 int DefineBoltLines(Line* lboltPtr, std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr);
 void DefineBoltTextures(TextureBolt* tboltPtr, std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr);
 void DefineBoltColors(BoltTriangleColor* cboltPtr, std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr);
@@ -140,18 +145,118 @@ int main() {
 	std::string blurVertexPath = projectBase + "\\Shader\\TwoPassGaussianBlur.vs";
 	std::string blurFragmentPath = projectBase + "\\Shader\\TwoPassGaussianBlur.fs";
 
+	std::string lightVartexPath = projectBase + "\\Shader\\light.vs";
+	std::string lightFragmentPath = projectBase + "\\Shader\\light.fs";
+
+	std::string objectVertexPath = projectBase + "\\Shader\\object.vs";
+	std::string objectFragmentPath = projectBase + "\\Shader\\object.fs";
+
 	//std::cout << "Vertex Path: " << vertexPath << std::endl;
 	//std::cout << "Fragment Path: " << fragmentPath << std::endl;
 
 	Shader boltShaderColor(boltColorVertexPath.c_str(), boltColorFragmentPath.c_str());
 	Shader screenShader(screenVertexPath.c_str(), screenFragmentPath.c_str());
 	Shader blurShader(blurVertexPath.c_str(), blurFragmentPath.c_str());
+	Shader lightShader(lightVartexPath.c_str(), lightFragmentPath.c_str());
+	Shader objectShader(objectVertexPath.c_str(), objectFragmentPath.c_str());
 	// ---------------
 
 	// Textures
 	// ---------------
 	// LoadTexture("");
 	// ---------------
+
+	// Lightning
+	// ---------------
+	float cubeVertices[] = {
+			-0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
+			 0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
+			 0.5f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
+			 0.5f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
+			-0.5f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
+			-0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
+
+			-0.5f, -0.5f,  0.5f,  0.0f,  0.0f,  1.0f,
+			 0.5f, -0.5f,  0.5f,  0.0f,  0.0f,  1.0f,
+			 0.5f,  0.5f,  0.5f,  0.0f,  0.0f,  1.0f,
+			 0.5f,  0.5f,  0.5f,  0.0f,  0.0f,  1.0f,
+			-0.5f,  0.5f,  0.5f,  0.0f,  0.0f,  1.0f,
+			-0.5f, -0.5f,  0.5f,  0.0f,  0.0f,  1.0f,
+
+			-0.5f,  0.5f,  0.5f, -1.0f,  0.0f,  0.0f,
+			-0.5f,  0.5f, -0.5f, -1.0f,  0.0f,  0.0f,
+			-0.5f, -0.5f, -0.5f, -1.0f,  0.0f,  0.0f,
+			-0.5f, -0.5f, -0.5f, -1.0f,  0.0f,  0.0f,
+			-0.5f, -0.5f,  0.5f, -1.0f,  0.0f,  0.0f,
+			-0.5f,  0.5f,  0.5f, -1.0f,  0.0f,  0.0f,
+
+			 0.5f,  0.5f,  0.5f,  1.0f,  0.0f,  0.0f,
+			 0.5f,  0.5f, -0.5f,  1.0f,  0.0f,  0.0f,
+			 0.5f, -0.5f, -0.5f,  1.0f,  0.0f,  0.0f,
+			 0.5f, -0.5f, -0.5f,  1.0f,  0.0f,  0.0f,
+			 0.5f, -0.5f,  0.5f,  1.0f,  0.0f,  0.0f,
+			 0.5f,  0.5f,  0.5f,  1.0f,  0.0f,  0.0f,
+
+			-0.5f, -0.5f, -0.5f,  0.0f, -1.0f,  0.0f,
+			 0.5f, -0.5f, -0.5f,  0.0f, -1.0f,  0.0f,
+			 0.5f, -0.5f,  0.5f,  0.0f, -1.0f,  0.0f,
+			 0.5f, -0.5f,  0.5f,  0.0f, -1.0f,  0.0f,
+			-0.5f, -0.5f,  0.5f,  0.0f, -1.0f,  0.0f,
+			-0.5f, -0.5f, -0.5f,  0.0f, -1.0f,  0.0f,
+
+			-0.5f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f,
+			 0.5f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f,
+			 0.5f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f,
+			 0.5f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f,
+			-0.5f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f,
+			-0.5f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f
+	};
+
+	unsigned int lightVAO, lightVBO;
+	glGenVertexArrays(1, &lightVAO);
+	glGenBuffers(1, &lightVBO);
+	glBindVertexArray(lightVAO);
+	glBindBuffer(GL_ARRAY_BUFFER, lightVBO);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(cubeVertices), cubeVertices, GL_STATIC_DRAW);
+	glBindVertexArray(lightVAO);
+
+	// position attribute
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
+	glEnableVertexAttribArray(0);
+	// no normal for light sources
+
+
+	// Scene Objects
+	// ---------------
+	// Floor
+	float floorVertices[48] = {
+		// positions          // normals           // texture coords
+		25.0f, -0.5f, 25.0f,  0.0f, 1.0f, 0.0f,   25.0f, 0.0f,
+		-25.0f, -0.5f, 25.0f,  0.0f, 1.0f, 0.0f,   0.0f, 0.0f,
+		-25.0f, -0.5f, -25.0f,  0.0f, 1.0f, 0.0f,   0.0f, 25.0f,
+
+		25.0f, -0.5f, 25.0f,  0.0f, 1.0f, 0.0f,   25.0f, 0.0f,
+		-25.0f, -0.5f, -25.0f,  0.0f, 1.0f, 0.0f,   0.0f, 25.0f,
+		25.0f, -0.5f, -25.0f,  0.0f, 1.0f, 0.0f,   25.0f, 25.0f
+	};
+	unsigned int floorVAO, floorVBO;
+	glGenVertexArrays(1, &floorVAO);
+	glGenBuffers(1, &floorVBO);
+	glBindVertexArray(floorVAO);
+	glBindBuffer(GL_ARRAY_BUFFER, floorVBO);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(floorVertices), floorVertices, GL_STATIC_DRAW);
+
+	glBindVertexArray(floorVAO);
+	// position attribute
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);
+	glEnableVertexAttribArray(0);
+	// normal attribute
+	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(3 * sizeof(float)));
+	glEnableVertexAttribArray(1);
+	// texture coord attribute
+	glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(6 * sizeof(float)));
+	glEnableVertexAttribArray(2);
+	// -------------
 
 
 	// Postprocessing
@@ -276,7 +381,7 @@ int main() {
 			// Line Bolt
 			for (int i = 0; i < lineCount; i++) {
 				// alternate color, useful to see structure
-				if (i % 2 == 0) { lboltPtr[i].SetColor(vec3(1, 0, 1)); }
+				// if (i % 2 == 0) { lboltPtr[i].SetColor(vec3(1, 0, 1)); }
 				lboltPtr[i].SetProjection(projection);
 				lboltPtr[i].SetView(view);
 				lboltPtr[i].Draw();
@@ -285,18 +390,52 @@ int main() {
 		case TrianglesColor:
 			// Color Triangle Bolt
 			boltShaderColor.Use();
-			SetMVPMatricies(boltShaderColor, view, projection);
+			SetVPMatricies(boltShaderColor, view, projection);
 			DrawBoltTriangleColor(cboltPtr);
 			break;
 		}
+		// light
+		lightShader.Use();
+		mat4 model = mat4(1.0f);
+		model = glm::translate(model, lightPos);
+		model = glm::scale(model, vec3(2));
+		SetMVPMatricies(lightShader, model, view, projection);
+		glBindVertexArray(lightVAO);
+		glDrawArrays(GL_TRIANGLES, 0, 36);
+
+		// floor
+		objectShader.Use();
+		objectShader.SetVec3("light.position", lightPos);
+		objectShader.SetVec3("viewPos", GetCameraPos());
+
+		// light properties
+		vec3 lightColor = vec3(1.0, 1.0, 1.0);
+		vec3 diffuseColor = lightColor * vec3(0.5f); // decrease the influence
+		vec3 ambientColor = diffuseColor * vec3(0.2f); // low influence
+		objectShader.SetVec3("light.ambient", ambientColor);
+		objectShader.SetVec3("light.diffuse", diffuseColor);
+		objectShader.SetVec3("light.specular", vec3 (1.0f, 1.0f, 1.0f));
+
+		// material properties 
+		objectShader.SetVec3("material.ambient", vec3 (0.5f, 0.5f, 0.5f));
+		objectShader.SetVec3("material.diffuse", vec3 (0.5f, 0.5f, 0.5f));
+		objectShader.SetVec3("material.specular", vec3 (0.5f, 0.5f, 0.5f));
+		objectShader.SetFloat("material.shininess", 32.0f);
+
+		// view / projection transformations
+		model = mat4(1.0f);
+		SetMVPMatricies(objectShader, model, view, projection);
+
+		// render
+		glBindVertexArray(floorVAO);
+		glDrawArrays(GL_TRIANGLES, 0, 6);
 
 		// Post Processing
 		// ---------------
 		// Blur
 		bool horizontal = true, first_iteration = true;
-		unsigned int amount = 10;
 		blurShader.Use();
-		for (unsigned int i = 0; i < amount; i++) 
+		for (int i = 0; i < amount; i++) 
 		{
 			glBindFramebuffer(GL_FRAMEBUFFER, pingpongFBO[horizontal]);
 			blurShader.SetInt("horizontal", horizontal);
@@ -321,8 +460,6 @@ int main() {
 		glClear(GL_COLOR_BUFFER_BIT);
 		glDisable(GL_DEPTH_TEST);
 		screenShader.Use();
-
-
 
 		glBindVertexArray(quadVAO);
 		glBindTexture(GL_TEXTURE_2D, pingpongBuffer[!horizontal]);
@@ -351,8 +488,14 @@ int main() {
 	return 0;
 }
 
-void SetMVPMatricies(Shader shader, mat4 view, mat4 projection) {
+void SetVPMatricies(Shader shader, mat4 view, mat4 projection) {
 	// camera and projection setting
+	shader.SetMat4("view", view);
+	shader.SetMat4("projection", projection);
+}
+
+void SetMVPMatricies(Shader shader, mat4 model, mat4 view, mat4 projection) {
+	shader.SetMat4("model", model);
 	shader.SetMat4("view", view);
 	shader.SetMat4("projection", projection);
 }
@@ -413,6 +556,7 @@ void ProcessMiscInput(GLFWwindow* window, bool* firstButtonPress) {
 	}
 	else if (glfwGetKey(window, GLFW_KEY_M) == GLFW_RELEASE) {
 		*firstButtonPress = true;
+		
 	}
 }
 
@@ -468,6 +612,7 @@ void RenderImGui() {
 	ImGui::Begin("Options");
 	ImGui::Text("Lightning Options:");
 	ImGui::Combo("Methods", &methodChoice, methodNames, IM_ARRAYSIZE(methodNames));	// dosen't work
+	ImGui::SliderInt("Blur Amount", &amount, 1, 100);
 
 	ImGui::End();
 

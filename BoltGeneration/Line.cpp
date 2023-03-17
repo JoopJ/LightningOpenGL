@@ -16,7 +16,7 @@ Line::Line(glm::vec3 start, glm::vec3 end) {
 void Line::Setup(vec3 start, vec3 end) {
 	startPoint = start;
 	endPoint = end;
-	lineColor = vec3(1, 1, 1);
+	lineColor = vec3(1, 1, 0);
 	projection = glm::mat4(1.0f);
 	view = glm::mat4(1.0f);
 
