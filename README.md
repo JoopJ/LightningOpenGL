@@ -28,8 +28,11 @@ Line - uses colored Line primitives
 Triangle Color - uses coloured triangle primitives
 
 ### TODO:
-- Render to a framebuffer then to screen quad for postprocessing
-
-- Gaussian Blur
 
 - Move Line shader into Shader object
+
+- Make lightning bolt source of light
+
+- HDR
+
+- Defered Rendering for large number of lights from bolt
