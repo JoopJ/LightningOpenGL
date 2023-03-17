@@ -33,9 +33,9 @@ ImGui is used for the GUI which allows editting of various variables used to gen
 #include <glm/gtc/matrix_transform.hpp>
 
 // other files
-#include "BoltGeneration/Line.h"
+#include "BoltGeneration/LineBoltSegment.h"
 #include "BoltGeneration/TextureBolt.h"
-#include "BoltGeneration/BoltTriangleColor.h"
+#include "BoltGeneration/TriangleBoltSegment.h"
 #include "BoltGeneration/LightningPatterns.h"
 #include "Shader/Shader.h"
 #include "FunctionLibrary.h"
@@ -64,13 +64,13 @@ int methodChoice = 1;
 // function prototypes
 void SetMVPMatricies(Shader shader, mat4 model, mat4 view, mat4 porjection);
 void SetVPMatricies(Shader shader, mat4 view, mat4 projection);
-int DefineBoltLines(Line* lboltPtr, std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr);
-void DefineBoltTextures(TextureBolt* tboltPtr, std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr);
-void DefineBoltColors(BoltTriangleColor* cboltPtr, std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr);
-void DrawBoltTriangleColor(BoltTriangleColor* cboltPtr);
+int DefineBoltLines(LineBoltSegment* lboltPtr, std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr);
+void DefineTriangleBolt(TriangleBoltSegment* tboltPtr, std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr);
+void DrawTriangleBolt(TriangleBoltSegment* tboltPtr);
+void DrawLineBolt(LineBoltSegment* lboltPtr);
 void ProcessMiscInput(GLFWwindow* window, bool* firstButtonPress);
 void ProcessLightningControlInput(GLFWwindow* window, int* lineCount,
-	Line* lboltPtr, BoltTriangleColor* cboltPtr, std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr);
+	LineBoltSegment* lboltPtr, TriangleBoltSegment* tboltPtr, std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr);
 void ConfigureWindow();
 void RenderImGui();
 GLFWwindow* CreateWindow();
@@ -103,17 +103,13 @@ int main() {
 	// Bolt Objects
 	// ---------------
 	// Lines	- Colored line primatives
-	Line boltLines[2000];
-	Line* lboltPtr = &boltLines[0];
+	LineBoltSegment boltLines[2000];
+	LineBoltSegment* lboltPtr = &boltLines[0];
 	int lineCount = 0;
-	// TextureBolts	- Textured Triangle primatives
-	TextureBolt* tboltPtr;
-	TextureBolt boltTextures[numSegmentsInPattern];
-	tboltPtr = &boltTextures[0];
-	// Color Bolts	- Colored Triangle primatives
-	BoltTriangleColor* cboltPtr;
-	BoltTriangleColor boltColors[numSegmentsInPattern];
-	cboltPtr = &boltColors[0];
+	// Triangles - Colored triangle primatives
+	TriangleBoltSegment* tboltPtr;
+	TriangleBoltSegment tsegments[numSegmentsInPattern];
+	tboltPtr = &tsegments[0];
 	// ---------------
 
 	// Lightning Pattern
@@ -127,7 +123,7 @@ int main() {
 		lineCount = DefineBoltLines(lboltPtr, lightningPatternPtr);
 		break;
 	case TrianglesColor:
-		DefineBoltColors(cboltPtr, lightningPatternPtr);
+		DefineTriangleBolt(tboltPtr, lightningPatternPtr);
 		break;
 	}
 	// ---------------
@@ -136,14 +132,17 @@ int main() {
 	// ---------------
 	std::string projectBase = ProjectBasePath();
 
-	std::string boltColorVertexPath = projectBase + "\\Shader\\bolt_triangle_color.vs";
-	std::string boltColorFragmentPath = projectBase + "\\Shader\\bolt_triangle_color.fs";
+	std::string boltTriangleVertexPath = projectBase + "\\Shader\\bolt_triangle_color.vs";
+	std::string boltTriangleFragmentPath = projectBase + "\\Shader\\bolt_triangle_color.fs";
+
+	std::string boltLineVertexPath = projectBase + "\\Shader\\bolt_line.vs";
+	std::string boltLineFragmentPath = projectBase + "\\Shader\\bolt_line.fs";
 
 	std::string screenVertexPath = projectBase + "\\Shader\\screen.vs";
 	std::string screenFragmentPath = projectBase + "\\Shader\\screen.fs";
 
-	std::string blurVertexPath = projectBase + "\\Shader\\TwoPassGaussianBlur.vs";
-	std::string blurFragmentPath = projectBase + "\\Shader\\TwoPassGaussianBlur.fs";
+	std::string blurVertexPath = projectBase + "\\Shader\\blur.vs";
+	std::string blurFragmentPath = projectBase + "\\Shader\\blur.fs";
 
 	std::string lightVartexPath = projectBase + "\\Shader\\light.vs";
 	std::string lightFragmentPath = projectBase + "\\Shader\\light.fs";
@@ -154,9 +153,13 @@ int main() {
 	//std::cout << "Vertex Path: " << vertexPath << std::endl;
 	//std::cout << "Fragment Path: " << fragmentPath << std::endl;
 
-	Shader boltShaderColor(boltColorVertexPath.c_str(), boltColorFragmentPath.c_str());
+	// bolts
+	Shader boltTriangleShader(boltTriangleVertexPath.c_str(), boltTriangleFragmentPath.c_str());
+	Shader boltLineShader(boltLineVertexPath.c_str(), boltLineFragmentPath.c_str());
+	// post processing
 	Shader screenShader(screenVertexPath.c_str(), screenFragmentPath.c_str());
 	Shader blurShader(blurVertexPath.c_str(), blurFragmentPath.c_str());
+	// lighting
 	Shader lightShader(lightVartexPath.c_str(), lightFragmentPath.c_str());
 	Shader objectShader(objectVertexPath.c_str(), objectFragmentPath.c_str());
 	// ---------------
@@ -350,7 +353,7 @@ int main() {
 		// -----------------------
 		ProcessKeyboardInput(window);
 		ProcessMiscInput(window, &firstMouseKeyPress);	// TODO: move GUI stuff into separate file
-		ProcessLightningControlInput(window, &lineCount, lboltPtr, cboltPtr, lightningPatternPtr);
+		ProcessLightningControlInput(window, &lineCount, lboltPtr, tboltPtr, lightningPatternPtr);
 
 		// Render Lightning
 		// -----------
@@ -379,19 +382,16 @@ int main() {
 		switch (methods[methodChoice]) {
 		case Lines:
 			// Line Bolt
-			for (int i = 0; i < lineCount; i++) {
-				// alternate color, useful to see structure
-				// if (i % 2 == 0) { lboltPtr[i].SetColor(vec3(1, 0, 1)); }
-				lboltPtr[i].SetProjection(projection);
-				lboltPtr[i].SetView(view);
-				lboltPtr[i].Draw();
-			}
+			boltLineShader.Use();
+			boltLineShader.SetVec3("color", vec3(1, 1, 0));
+			SetVPMatricies(boltLineShader, view, projection);
+			DrawLineBolt(lboltPtr);
 			break;
 		case TrianglesColor:
 			// Color Triangle Bolt
-			boltShaderColor.Use();
-			SetVPMatricies(boltShaderColor, view, projection);
-			DrawBoltTriangleColor(cboltPtr);
+			boltTriangleShader.Use();
+			SetVPMatricies(boltTriangleShader, view, projection);
+			DrawTriangleBolt(tboltPtr);
 			break;
 		}
 		// light
@@ -506,31 +506,31 @@ void SetMVPMatricies(Shader shader, mat4 model, mat4 view, mat4 projection) {
 
 // Bolt segment Setup - TODO: 
 // -------------
-int DefineBoltLines(Line* lboltPtr, std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr) {
+int DefineBoltLines(LineBoltSegment* lboltPtr, std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr) {
 	for (int i = 0; i < numSegmentsInPattern - 1; i++) {
 		lboltPtr[i].Setup(lightningPatternPtr[i], lightningPatternPtr[i + 1]);
 	}
 	return numSegmentsInPattern;
 }
 
-void DefineBoltTextures(TextureBolt* tboltPtr, std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr) {
+void DefineTriangleBolt(TriangleBoltSegment* tboltPtr, std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr) {
 	for (int i = 0; i < numSegmentsInPattern - 1; i++) {
-		tboltPtr[i].Setup(lightningPatternPtr[i], lightningPatternPtr[i+1]);
-	}
-}
-
-void DefineBoltColors(BoltTriangleColor* cboltPtr, std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr) {
-	for (int i = 0; i < numSegmentsInPattern - 1; i++) {
-		cboltPtr[i].Setup(lightningPatternPtr[i], lightningPatternPtr[i + 1]);
+		tboltPtr[i].Setup(lightningPatternPtr[i], lightningPatternPtr[i + 1]);
 	}
 }
 // ----------------
 
 // Bolt Draw
 // ---------------
-void DrawBoltTriangleColor(BoltTriangleColor* cboltPtr) {
+void DrawTriangleBolt(TriangleBoltSegment* tboltPtr) {
 	for (int i = 0; i < numSegmentsInPattern - 1; i++) {
-		cboltPtr[i].Draw();
+		tboltPtr[i].Draw();
+	}
+}
+
+void DrawLineBolt(LineBoltSegment* lboltPtr) {
+	for (int i = 0; i < numSegmentsInPattern - 1; i++) {
+		lboltPtr[i].Draw();
 	}
 }
 // ---------------
@@ -567,7 +567,7 @@ void ProcessMiscInput(GLFWwindow* window, bool* firstButtonPress) {
 bool spaceHeld = false;
 // ProcessLightningControlInput, process inputs relating to control of the lightning
 void ProcessLightningControlInput(GLFWwindow* window, int* lineCount,
-	Line* lboltPtr, BoltTriangleColor* cboltPtr, std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr) {
+	LineBoltSegment* lboltPtr, TriangleBoltSegment* tboltPtr, std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr) {
 
 	// recalculate lines	TODO: method choices should choose between lines and tbolts
 	if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS && !spaceHeld) {
@@ -580,7 +580,7 @@ void ProcessLightningControlInput(GLFWwindow* window, int* lineCount,
 			*lineCount = DefineBoltLines(lboltPtr, lightningPatternPtr);
 			break;
 		case TrianglesColor:
-			DefineBoltColors(cboltPtr, lightningPatternPtr);
+			DefineTriangleBolt(tboltPtr, lightningPatternPtr);
 			break;
 		}
 		strikeStartTime = glfwGetTime();

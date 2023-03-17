@@ -6,7 +6,7 @@ using glm::vec3;
 
 #include "../FunctionLibrary.h"
 
-class BoltTriangleColor {
+class TriangleBoltSegment {
 private:
 	unsigned int VAO, VBO, EBO;	
 	float vertices[24];
@@ -14,7 +14,7 @@ private:
 
 public:
 	glm::vec3 color;
-	BoltTriangleColor();
+	TriangleBoltSegment();
 	void Draw();
 	void Setup(glm::vec3 start, glm::vec3 end);
 };

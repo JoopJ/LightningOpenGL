@@ -1,11 +1,11 @@
-#include "BoltTriangleColor.h"
+#include "TriangleBoltSegment.h"
 
 // constructor
-BoltTriangleColor::BoltTriangleColor() {
+TriangleBoltSegment::TriangleBoltSegment() {
 	color = vec3(1, 1, 0); // default color
 }
 
-void BoltTriangleColor::Draw() {
+void TriangleBoltSegment::Draw() {
 	glBindVertexArray(VAO);
 	//glDrawArrays(GL_TRIANGLES, 0, 6);
 	glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
@@ -17,7 +17,7 @@ void BoltTriangleColor::Draw() {
 /// </summary>
 /// <param name="start"></param>
 /// <param name="end"></param>
-void BoltTriangleColor::Setup(vec3 start, vec3 end) {
+void TriangleBoltSegment::Setup(vec3 start, vec3 end) {
 	// vertices
 	float offSet = 0.1;
 	float verticesSet[24] = {
