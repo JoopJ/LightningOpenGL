@@ -54,7 +54,7 @@ const vec3 startPnt = vec3(400,8000, 0);
 // post processing
 int amount = 1;
 // light
-vec3 lightPos(1.2f, 1.0f, 2.0f);
+vec3 lightPos(1.2f, 5.0f, 2.0f);
 
 enum Method { Lines, TrianglesColor };
 Method methods[2] = { Lines, TrianglesColor };
@@ -415,6 +415,10 @@ int main() {
 		objectShader.SetVec3("light.ambient", ambientColor);
 		objectShader.SetVec3("light.diffuse", diffuseColor);
 		objectShader.SetVec3("light.specular", vec3 (1.0f, 1.0f, 1.0f));
+		// attenuation
+		objectShader.SetFloat("light.constant", 1.0f);
+		objectShader.SetFloat("light.linear", 0.09f);
+		objectShader.SetFloat("light.quadratic", 0.032f);
 
 		// material properties 
 		objectShader.SetVec3("material.ambient", vec3 (0.5f, 0.5f, 0.5f));
