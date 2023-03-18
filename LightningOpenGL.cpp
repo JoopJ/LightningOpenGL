@@ -50,7 +50,7 @@ using glm::lookAt;
 // time for the lightning
 double strikeStartTime;
 // lightning start position
-const vec3 startPnt = vec3(400,8000, 0);
+const vec3 startPnt = vec3(400, 8000, 0);
 // post processing
 int amount = 1;
 // light
@@ -75,6 +75,8 @@ void ConfigureWindow();
 void RenderImGui();
 GLFWwindow* CreateWindow();
 void InitImGui(GLFWwindow* window);
+// renderers
+void RenderQuad();
 
 int main() {
 	// Initial Configurations and Window Creation
@@ -268,7 +270,7 @@ int main() {
 	unsigned int fbo;
 	glGenFramebuffers(1, &fbo);
 	glBindFramebuffer(GL_FRAMEBUFFER, fbo);
-	
+
 	// texture color buffer object
 	unsigned int tcbo;
 	// genereate and attach to framebuffer object (fbo)
@@ -295,29 +297,7 @@ int main() {
 	}
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-	glBindFramebuffer(GL_FRAMEBUFFER,0);
-
-	// screen quad VAO
-	float quadVertices[] = {	// fills whole screen in NDC;
-		// positions   // texCoords
-		-1.0f,  1.0f,  0.0f, 1.0f,
-		-1.0f, -1.0f,  0.0f, 0.0f,
-		 1.0f, -1.0f,  1.0f, 0.0f,
-
-		-1.0f,  1.0f,  0.0f, 1.0f,
-		 1.0f, -1.0f,  1.0f, 0.0f,
-		 1.0f,  1.0f,  1.0f, 1.0f
-	};
-	unsigned int quadVAO, quadVBO;
-	glGenVertexArrays(1, &quadVAO);
-	glGenBuffers(1, &quadVBO);
-	glBindVertexArray(quadVAO);
-	glBindBuffer(GL_ARRAY_BUFFER, quadVBO);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), &quadVertices, GL_STATIC_DRAW);
-	glVertexAttribPointer(0, 2 , GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
-	glEnableVertexAttribArray(0);
-	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
-	glEnableVertexAttribArray(1);
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
 	// ping pong buffers
 	unsigned int pingpongFBO[2];
@@ -407,23 +387,21 @@ int main() {
 		objectShader.Use();
 		objectShader.SetVec3("light.position", lightPos);
 		objectShader.SetVec3("viewPos", GetCameraPos());
-
 		// light properties
 		vec3 lightColor = vec3(1.0, 1.0, 1.0);
 		vec3 diffuseColor = lightColor * vec3(0.5f); // decrease the influence
 		vec3 ambientColor = diffuseColor * vec3(0.2f); // low influence
 		objectShader.SetVec3("light.ambient", ambientColor);
 		objectShader.SetVec3("light.diffuse", diffuseColor);
-		objectShader.SetVec3("light.specular", vec3 (1.0f, 1.0f, 1.0f));
+		objectShader.SetVec3("light.specular", vec3(1.0f, 1.0f, 1.0f));
 		// attenuation
 		objectShader.SetFloat("light.constant", 1.0f);
 		objectShader.SetFloat("light.linear", 0.09f);
 		objectShader.SetFloat("light.quadratic", 0.032f);
-
 		// material properties 
-		objectShader.SetVec3("material.ambient", vec3 (0.5f, 0.5f, 0.5f));
-		objectShader.SetVec3("material.diffuse", vec3 (0.5f, 0.5f, 0.5f));
-		objectShader.SetVec3("material.specular", vec3 (0.5f, 0.5f, 0.5f));
+		objectShader.SetVec3("material.ambient", vec3(0.5f, 0.5f, 0.5f));
+		objectShader.SetVec3("material.diffuse", vec3(0.5f, 0.5f, 0.5f));
+		objectShader.SetVec3("material.specular", vec3(0.5f, 0.5f, 0.5f));
 		objectShader.SetFloat("material.shininess", 32.0f);
 
 		// view / projection transformations
@@ -439,16 +417,14 @@ int main() {
 		// Blur
 		bool horizontal = true, first_iteration = true;
 		blurShader.Use();
-		for (int i = 0; i < amount; i++) 
+		for (int i = 0; i < amount; i++)
 		{
 			glBindFramebuffer(GL_FRAMEBUFFER, pingpongFBO[horizontal]);
 			blurShader.SetInt("horizontal", horizontal);
 			// bind texutre of other framebuffer, or scene if first iteration
 			glBindTexture(GL_TEXTURE_2D, first_iteration ? tcbo : pingpongBuffer[!horizontal]);
 			// render quad
-			glBindVertexArray(quadVAO);
-			glDrawArrays(GL_TRIANGLES, 0, 6);
-			glBindVertexArray(0);
+			RenderQuad();
 			// swap buffers
 			horizontal = !horizontal;
 			if (first_iteration) {
@@ -463,11 +439,10 @@ int main() {
 		glClearColor(0.0, 0.5, 1.0, 1.0);
 		glClear(GL_COLOR_BUFFER_BIT);
 		glDisable(GL_DEPTH_TEST);
-		screenShader.Use();
 
-		glBindVertexArray(quadVAO);
+		screenShader.Use();
 		glBindTexture(GL_TEXTURE_2D, pingpongBuffer[!horizontal]);
-		glDrawArrays(GL_TRIANGLES, 0, 6);
+		RenderQuad();
 
 		// ---------------
 		// 
@@ -560,7 +535,7 @@ void ProcessMiscInput(GLFWwindow* window, bool* firstButtonPress) {
 	}
 	else if (glfwGetKey(window, GLFW_KEY_M) == GLFW_RELEASE) {
 		*firstButtonPress = true;
-		
+
 	}
 }
 
@@ -647,4 +622,33 @@ void InitImGui(GLFWwindow* window) {
 	ImGui::StyleColorsDark();
 	ImGui_ImplGlfw_InitForOpenGL(window, true);
 	ImGui_ImplOpenGL3_Init("#version 460");
+}
+
+unsigned int quadVAO = 0;
+void RenderQuad() {
+	if (quadVAO == 0) {	// setup
+		float quadVertices[] = {	// fills whole screen in NDC;
+			// positions   // texCoords
+			-1.0f,  1.0f,  0.0f, 1.0f,
+			-1.0f, -1.0f,  0.0f, 0.0f,
+			 1.0f, -1.0f,  1.0f, 0.0f,
+
+			-1.0f,  1.0f,  0.0f, 1.0f,
+			 1.0f, -1.0f,  1.0f, 0.0f,
+			 1.0f,  1.0f,  1.0f, 1.0f
+		};
+		unsigned int quadVBO;
+		glGenVertexArrays(1, &quadVAO);
+		glGenBuffers(1, &quadVBO);
+		glBindVertexArray(quadVAO);
+		glBindBuffer(GL_ARRAY_BUFFER, quadVBO);
+		glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), &quadVertices, GL_STATIC_DRAW);
+		glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
+		glEnableVertexAttribArray(0);
+		glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
+		glEnableVertexAttribArray(1);
+	}
+	glBindVertexArray(quadVAO);
+	glDrawArrays(GL_TRIANGLES, 0, 6);
+	glBindVertexArray(0);
 }
