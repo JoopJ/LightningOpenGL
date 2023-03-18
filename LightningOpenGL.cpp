@@ -136,11 +136,8 @@ int main() {
 	// ---------------
 	std::string projectBase = ProjectBasePath();
 
-	std::string boltTriangleVertexPath = projectBase + "\\Shader\\bolt_triangle_color.vs";
-	std::string boltTriangleFragmentPath = projectBase + "\\Shader\\bolt_triangle_color.fs";
-
-	std::string boltLineVertexPath = projectBase + "\\Shader\\bolt_line.vs";
-	std::string boltLineFragmentPath = projectBase + "\\Shader\\bolt_line.fs";
+	std::string boltVertexPath = projectBase + "\\Shader\\bolt.vs";
+	std::string boltFragmentPath = projectBase + "\\Shader\\bolt.fs";
 
 	std::string screenVertexPath = projectBase + "\\Shader\\screen.vs";
 	std::string screenFragmentPath = projectBase + "\\Shader\\screen.fs";
@@ -158,8 +155,8 @@ int main() {
 	//std::cout << "Fragment Path: " << fragmentPath << std::endl;
 
 	// bolts
-	Shader boltTriangleShader(boltTriangleVertexPath.c_str(), boltTriangleFragmentPath.c_str());
-	Shader boltLineShader(boltLineVertexPath.c_str(), boltLineFragmentPath.c_str());
+	Shader boltShader(boltVertexPath.c_str(), boltFragmentPath.c_str());
+
 	// post processing
 	Shader screenShader(screenVertexPath.c_str(), screenFragmentPath.c_str());
 	Shader blurShader(blurVertexPath.c_str(), blurFragmentPath.c_str());
@@ -181,15 +178,19 @@ int main() {
 	glGenFramebuffers(1, &fbo);
 	glBindFramebuffer(GL_FRAMEBUFFER, fbo);
 
-	// texture color buffer object
-	unsigned int tcbo;
+	// texture color buffer objects
+	unsigned int tcbo[2];
 	// genereate and attach to framebuffer object (fbo)
-	glGenTextures(1, &tcbo);
-	glBindTexture(GL_TEXTURE_2D, tcbo);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, SCR_WIDTH, SCR_HEIGHT, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, tcbo, 0);
+	glGenTextures(2, tcbo);
+	for (unsigned int i = 0; i < 2; i++) {
+		glBindTexture(GL_TEXTURE_2D, tcbo[i]);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, SCR_WIDTH, SCR_HEIGHT, 0, GL_RGBA, GL_FLOAT, NULL);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, tcbo[i], 0);
+	}
 
 	// depth and stencil buffer object
 	unsigned int rbo; // can be a renderbuffer object as we don't need to sample from it
@@ -200,13 +201,14 @@ int main() {
 	glBindRenderbuffer(GL_RENDERBUFFER, 0);
 	// attach to the framebuffer object (fbo)
 	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, rbo);
+	// tell opengl to render to multiple colorbuffers
+	unsigned int attachments[2] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
+	glDrawBuffers(2, attachments);
 
 	// check fbo is complete
 	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
 		std::cout << "ERROR::FRAMEBUFFER:: Framebuffer is not complete!" << std::endl;
 	}
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
 	// ping pong buffers
@@ -269,18 +271,17 @@ int main() {
 		glEnable(GL_DEPTH_TEST);
 
 		// Drawing
+		boltShader.Use();
+		boltShader.SetVec3("color", vec3(1, 1, 0));
 		switch (methods[methodChoice]) {
 		case Lines:
 			// Line Bolt
-			boltLineShader.Use();
-			boltLineShader.SetVec3("color", vec3(1, 1, 0));
-			SetVPMatricies(boltLineShader, view, projection);
+			SetVPMatricies(boltShader, view, projection);
 			DrawLineBolt(lboltPtr);
 			break;
 		case TrianglesColor:
 			// Color Triangle Bolt
-			boltTriangleShader.Use();
-			SetVPMatricies(boltTriangleShader, view, projection);
+			SetVPMatricies(boltShader, view, projection);
 			DrawTriangleBolt(tboltPtr);
 			break;
 		}
@@ -329,7 +330,7 @@ int main() {
 			glBindFramebuffer(GL_FRAMEBUFFER, pingpongFBO[horizontal]);
 			blurShader.SetInt("horizontal", horizontal);
 			// bind texutre of other framebuffer, or scene if first iteration
-			glBindTexture(GL_TEXTURE_2D, first_iteration ? tcbo : pingpongBuffer[!horizontal]);
+			glBindTexture(GL_TEXTURE_2D, first_iteration ? tcbo[1] : pingpongBuffer[!horizontal]);
 			// render quad
 			RenderQuad();
 			// swap buffers
