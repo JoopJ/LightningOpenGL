@@ -78,6 +78,7 @@ void InitImGui(GLFWwindow* window);
 // renderers
 void RenderQuad();
 void RenderCube();
+void RenderFloor();
 
 int main() {
 	// Initial Configurations and Window Creation
@@ -171,41 +172,6 @@ int main() {
 	// ---------------
 	// LoadTexture("");
 	// ---------------
-
-	// Lightning
-	// ---------------
-
-	// Scene Objects
-	// ---------------
-	// Floor
-	float floorVertices[48] = {
-		// positions          // normals           // texture coords
-		25.0f, -0.5f, 25.0f,  0.0f, 1.0f, 0.0f,   25.0f, 0.0f,
-		-25.0f, -0.5f, 25.0f,  0.0f, 1.0f, 0.0f,   0.0f, 0.0f,
-		-25.0f, -0.5f, -25.0f,  0.0f, 1.0f, 0.0f,   0.0f, 25.0f,
-
-		25.0f, -0.5f, 25.0f,  0.0f, 1.0f, 0.0f,   25.0f, 0.0f,
-		-25.0f, -0.5f, -25.0f,  0.0f, 1.0f, 0.0f,   0.0f, 25.0f,
-		25.0f, -0.5f, -25.0f,  0.0f, 1.0f, 0.0f,   25.0f, 25.0f
-	};
-	unsigned int floorVAO, floorVBO;
-	glGenVertexArrays(1, &floorVAO);
-	glGenBuffers(1, &floorVBO);
-	glBindVertexArray(floorVAO);
-	glBindBuffer(GL_ARRAY_BUFFER, floorVBO);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(floorVertices), floorVertices, GL_STATIC_DRAW);
-
-	glBindVertexArray(floorVAO);
-	// position attribute
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);
-	glEnableVertexAttribArray(0);
-	// normal attribute
-	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(3 * sizeof(float)));
-	glEnableVertexAttribArray(1);
-	// texture coord attribute
-	glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(6 * sizeof(float)));
-	glEnableVertexAttribArray(2);
-	// -------------
 
 
 	// Postprocessing
@@ -351,9 +317,7 @@ int main() {
 		model = mat4(1.0f);
 		SetMVPMatricies(objectShader, model, view, projection);
 
-		// render
-		glBindVertexArray(floorVAO);
-		glDrawArrays(GL_TRIANGLES, 0, 6);
+		RenderFloor();
 
 		// Post Processing
 		// ---------------
@@ -661,4 +625,40 @@ void RenderCube() {
 	glDrawArrays(GL_TRIANGLES, 0, 36);
 	glBindVertexArray(0);
 
+}
+
+unsigned int floorVAO = 0;
+void RenderFloor() {
+	if (floorVAO == 0) {
+		float floorVertices[48] = {
+			// positions          // normals           // texture coords
+			25.0f, -0.5f, 25.0f,  0.0f, 1.0f, 0.0f,   25.0f, 0.0f,
+			-25.0f, -0.5f, 25.0f,  0.0f, 1.0f, 0.0f,   0.0f, 0.0f,
+			-25.0f, -0.5f, -25.0f,  0.0f, 1.0f, 0.0f,   0.0f, 25.0f,
+
+			25.0f, -0.5f, 25.0f,  0.0f, 1.0f, 0.0f,   25.0f, 0.0f,
+			-25.0f, -0.5f, -25.0f,  0.0f, 1.0f, 0.0f,   0.0f, 25.0f,
+			25.0f, -0.5f, -25.0f,  0.0f, 1.0f, 0.0f,   25.0f, 25.0f
+		};
+		unsigned int floorVBO;
+		glGenVertexArrays(1, &floorVAO);
+		glGenBuffers(1, &floorVBO);
+		glBindVertexArray(floorVAO);
+		glBindBuffer(GL_ARRAY_BUFFER, floorVBO);
+		glBufferData(GL_ARRAY_BUFFER, sizeof(floorVertices), floorVertices, GL_STATIC_DRAW);
+
+		glBindVertexArray(floorVAO);
+		// position attribute
+		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);
+		glEnableVertexAttribArray(0);
+		// normal attribute
+		glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(3 * sizeof(float)));
+		glEnableVertexAttribArray(1);
+		// texture coord attribute
+		glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(6 * sizeof(float)));
+		glEnableVertexAttribArray(2);
+	}
+	// render
+	glBindVertexArray(floorVAO);
+	glDrawArrays(GL_TRIANGLES, 0, 6);
 }
