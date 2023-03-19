@@ -59,7 +59,7 @@ vec3 lightPos(1.2f, 5.0f, 2.0f);
 enum Method { Lines, TrianglesColor };
 Method methods[2] = { Lines, TrianglesColor };
 const char* methodNames[2] = { "Line", "TriangleColor" };
-int methodChoice = 1;
+int methodChoice = 0;
 
 // function prototypes
 void SetMVPMatricies(Shader shader, mat4 model, mat4 view, mat4 porjection);
@@ -79,6 +79,7 @@ void InitImGui(GLFWwindow* window);
 void RenderQuad();
 void RenderCube();
 void RenderFloor();
+void RenderWall();
 
 int main() {
 	// Initial Configurations and Window Creation
@@ -91,7 +92,6 @@ int main() {
 		return -1;
 	}
 	InitImGui(window);
-	// ------------------------
 
 	// Input
 	// ---------------
@@ -135,6 +135,7 @@ int main() {
 	// Shaders
 	// ---------------
 	std::string projectBase = ProjectBasePath();
+	//std::cout << "Project Base Path: " << projectBase << std::endl;
 
 	std::string boltVertexPath = projectBase + "\\Shader\\bolt.vs";
 	std::string boltFragmentPath = projectBase + "\\Shader\\bolt.fs";
@@ -151,25 +152,28 @@ int main() {
 	std::string objectVertexPath = projectBase + "\\Shader\\object.vs";
 	std::string objectFragmentPath = projectBase + "\\Shader\\object.fs";
 
-	//std::cout << "Vertex Path: " << vertexPath << std::endl;
-	//std::cout << "Fragment Path: " << fragmentPath << std::endl;
+	std::string objectMultipleLightsFragmentPath = projectBase + "\\Shader\\multiple_lights_object.fs";
 
 	// bolts
 	Shader boltShader(boltVertexPath.c_str(), boltFragmentPath.c_str());
-
 	// post processing
 	Shader screenShader(screenVertexPath.c_str(), screenFragmentPath.c_str());
 	Shader blurShader(blurVertexPath.c_str(), blurFragmentPath.c_str());
 	// lighting
 	Shader lightShader(lightVartexPath.c_str(), lightFragmentPath.c_str());
-	Shader objectShader(objectVertexPath.c_str(), objectFragmentPath.c_str());
+	Shader objectMultiLightShader(objectVertexPath.c_str(), objectMultipleLightsFragmentPath.c_str());
 	// ---------------
 
-	// Textures
-	// ---------------
-	// LoadTexture("");
-	// ---------------
-
+	// Lighting
+	// -------------------------
+	// multiple point light testing stuff
+	vec3 pointLightPositions[4] = {
+		vec3(10.7f, 3.2f, 2.0f),
+		vec3(2.3f, 3.3f, -4.0f),
+		vec3(-4.0f, 3.0f, -12.0f),
+		vec3(-11.0f, 3.0f, -3.0f)
+	};
+	// ------------------------
 
 	// Postprocessing
 	// ---------------
@@ -231,10 +235,6 @@ int main() {
 
 	// render loop
 	while (!glfwWindowShouldClose(window)) {
-		// set background color
-		glClearColor(0.0, 0.5, 1.0, 1.0);
-		glClear(GL_COLOR_BUFFER_BIT);
-
 		// pre-frame time logic
 		// -----------------------
 		float currentFrame = static_cast<float>(glfwGetTime());
@@ -250,19 +250,10 @@ int main() {
 		// Render Lightning
 		// -----------
 		// 
-		// MVP (no model's atm)
+		// MVP
+		mat4 model;
 		mat4 view = lookAt(GetCameraPos(), GetCameraPos() + GetCameraFront(), GetCameraUp());
 		mat4 projection = glm::perspective(glm::radians(GetFOV()), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.0f);
-		// Strike Timing
-		/*
-		double strikeDuration = 0.1;
-		// draw lines one by one over time
-		double currentTime = glfwGetTime();
-		int numLinesToDraw = std::min((int)((currentTime - strikeStartTime) / (strikeDuration / lineCount)), lineCount);
-		if (numLinesToDraw != lineCount) {
-			std::cout << numLinesToDraw << std::endl;
-		}
-		*/
 
 		// first pass, to framebuffer object (fbo)
 		glBindFramebuffer(GL_FRAMEBUFFER, fbo);
@@ -271,6 +262,7 @@ int main() {
 		glEnable(GL_DEPTH_TEST);
 
 		// Drawing
+		// Bolts
 		boltShader.Use();
 		boltShader.SetVec3("color", vec3(1, 1, 0));
 		switch (methods[methodChoice]) {
@@ -285,41 +277,62 @@ int main() {
 			DrawTriangleBolt(tboltPtr);
 			break;
 		}
-		// light
+		// ------------------
+		
+		// Point Lights - for testing, will be moved to bolts later
+		// ------------------
 		lightShader.Use();
-		mat4 model = mat4(1.0f);
-		model = glm::translate(model, lightPos);
-		model = glm::scale(model, vec3(2));
-		SetMVPMatricies(lightShader, model, view, projection);
-		RenderCube();
+		for (int i = 0; i < 4; i++) {
+			model = mat4(1.0f);
+			model = glm::translate(model, pointLightPositions[i]);
+			model = glm::scale(model, vec3(0.5f));
+			SetMVPMatricies(lightShader, model, view, projection);
+			RenderCube();
+		}
+		// Objects
+		// ---------------
 
+		// multiple spot light properties for object shader
+		objectMultiLightShader.Use();
+		vec3 slColor = vec3(1, 1, 0);	// light color
+		vec3 slDiffuse = slColor * vec3(0.5f);
+		vec3 slAmbient = slDiffuse * vec3(0.2f);
+		vec3 slSpecular = vec3(1.0f, 1.0f, 1.0f);
+		float slConstant = 1.0f;
+		float slLinear = 0.09f;
+		float slQuadratic = 0.032f;
+		// camera
+		objectMultiLightShader.SetVec3("viewPos", GetCameraPos());
+		// spot light properties
+		for (int i = 0; i < 4; i++) {
+			std::ostringstream stream;
+			stream << "pointLights[" << i << "].";
+			std::string pointLight = stream.str(); // pointLight = "poingLights[i]."
+			objectMultiLightShader.SetVec3(pointLight + "position", pointLightPositions[i]);
+			objectMultiLightShader.SetVec3(pointLight + "ambient", slAmbient);
+			objectMultiLightShader.SetVec3(pointLight + "diffuse", slDiffuse);
+			objectMultiLightShader.SetVec3(pointLight + "specular", slSpecular);
+			objectMultiLightShader.SetFloat(pointLight + "constant", slConstant);
+			objectMultiLightShader.SetFloat(pointLight + "liner", slLinear);
+			objectMultiLightShader.SetFloat(pointLight + "quadratic", slQuadratic);
+		}
+		// material properties
+		vec3 mColor = vec3(0.3, 0.3, 0.3);	// material color
+		vec3 mDiffuse = mColor * vec3(0.5f);
+		vec3 mAmbient = mDiffuse * vec3(0.2f);
+		vec3 mSpecular = vec3(1.0f, 1.0f, 1.0f);
+		objectMultiLightShader.SetVec3("material.ambient", mAmbient);
+		objectMultiLightShader.SetVec3("material.diffuse", mDiffuse);
+		objectMultiLightShader.SetVec3("material.specular", mSpecular); // dosen't really take effect
+		objectMultiLightShader.SetFloat("material.shininess", 32.0f);
 		// floor
-		objectShader.Use();
-		objectShader.SetVec3("light.position", lightPos);
-		objectShader.SetVec3("viewPos", GetCameraPos());
-		// light properties
-		vec3 lightColor = vec3(1.0, 1.0, 1.0);
-		vec3 diffuseColor = lightColor * vec3(0.5f); // decrease the influence
-		vec3 ambientColor = diffuseColor * vec3(0.2f); // low influence
-		objectShader.SetVec3("light.ambient", ambientColor);
-		objectShader.SetVec3("light.diffuse", diffuseColor);
-		objectShader.SetVec3("light.specular", vec3(1.0f, 1.0f, 1.0f));
-		// attenuation
-		objectShader.SetFloat("light.constant", 1.0f);
-		objectShader.SetFloat("light.linear", 0.09f);
-		objectShader.SetFloat("light.quadratic", 0.032f);
-		// material properties 
-		objectShader.SetVec3("material.ambient", vec3(0.5f, 0.5f, 0.5f));
-		objectShader.SetVec3("material.diffuse", vec3(0.5f, 0.5f, 0.5f));
-		objectShader.SetVec3("material.specular", vec3(0.5f, 0.5f, 0.5f));
-		objectShader.SetFloat("material.shininess", 32.0f);
-
-		// view / projection transformations
 		model = mat4(1.0f);
-		SetMVPMatricies(objectShader, model, view, projection);
-
-		RenderFloor();
-
+		SetMVPMatricies(objectMultiLightShader, model, view, projection);
+		// wall
+		objectMultiLightShader.SetVec3("objectColor", vec3(0, 0, 0));
+		RenderWall();
+		// ---------------
+		
 		// Post Processing
 		// ---------------
 		// Blur
@@ -362,8 +375,13 @@ int main() {
 		glfwSwapBuffers(window);
 		glfwPollEvents();
 	}
-
+	// deleter buffers
 	glDeleteBuffers(1, &fbo);
+	glDeleteBuffers(1, &rbo);
+	glDeleteBuffers(1, &tcbo[0]);
+	glDeleteBuffers(1, &tcbo[1]);
+	glDeleteBuffers(1, &pingpongBuffer[0]);
+	glDeleteBuffers(1, &pingpongBuffer[1]);
 
 	// imgui: shutdown and cleanup
 	ImGui_ImplOpenGL3_Shutdown();
@@ -565,6 +583,7 @@ unsigned int cubeVAO = 0;
 void RenderCube() {
 	if (cubeVAO == 0) {
 		float cubeVertices[] = { // setup
+			// position			  // normal
 			-0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
 			 0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
 			 0.5f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
@@ -619,7 +638,9 @@ void RenderCube() {
 		// position attribute
 		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
 		glEnableVertexAttribArray(0);
-		// no normal for light sources
+		// normal attribute
+		glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
+		glEnableVertexAttribArray(1);
 	}
 
 	glBindVertexArray(cubeVAO);
@@ -661,5 +682,43 @@ void RenderFloor() {
 	}
 	// render
 	glBindVertexArray(floorVAO);
+	glDrawArrays(GL_TRIANGLES, 0, 6);
+}
+
+unsigned int wallVAO = 0;
+void RenderWall() {
+	if (wallVAO == 0) {
+		float wallVertices[]{
+			// positions          // normals
+			25.0f,  25.5f, 10.0f,  0.0f, 0.0f, -1.0f,	
+			-25.0f,  25.5f, 10.0f,  0.0f, 0.0f, -1.0f,
+			-25.0f, -25.5f, 10.0f,  0.0f, 0.0f, -1.0f,
+
+			25.0f,  25.5f, 10.0f,  0.0f, 0.0f, -1.0f,
+			-25.0f, -25.5f, 10.0f,  0.0f, 0.0f, -1.0f,
+			25.0f, -25.5f, 10.0f,  0.0f, 0.0f, -1.0f,
+		};
+
+		unsigned int wallVBO;
+		glGenVertexArrays(1, &wallVAO);
+		glGenBuffers(1, &wallVBO);
+		glBindVertexArray(wallVAO);
+		glBindBuffer(GL_ARRAY_BUFFER, wallVBO);
+		glBufferData(GL_ARRAY_BUFFER, sizeof(wallVertices), wallVertices, GL_STATIC_DRAW);
+
+		glBindVertexArray(wallVAO);
+		// position attribute
+		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
+		glEnableVertexAttribArray(0);
+		// normal attribute
+		glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
+		glEnableVertexAttribArray(1);
+		// texture coord attribute
+		glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(6 * sizeof(float)));
+		glEnableVertexAttribArray(2);
+	}
+
+	// render
+	glBindVertexArray(wallVAO);
 	glDrawArrays(GL_TRIANGLES, 0, 6);
 }
