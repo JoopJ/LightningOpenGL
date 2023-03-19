@@ -62,15 +62,21 @@ const char* methodNames[2] = { "Line", "TriangleColor" };
 int methodChoice = 0;
 
 // function prototypes
+// MVP Setters
 void SetMVPMatricies(Shader shader, mat4 model, mat4 view, mat4 porjection);
 void SetVPMatricies(Shader shader, mat4 view, mat4 projection);
+// Define Bolt
 int DefineBoltLines(LineBoltSegment* lboltPtr, std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr);
 void DefineTriangleBolt(TriangleBoltSegment* tboltPtr, std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr);
+void PositionBoltPointLights(vec3* lightPositionsPtr, std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr);
+// Drawing
 void DrawTriangleBolt(TriangleBoltSegment* tboltPtr);
 void DrawLineBolt(LineBoltSegment* lboltPtr);
+// Input
 void ProcessMiscInput(GLFWwindow* window, bool* firstButtonPress);
 void ProcessLightningControlInput(GLFWwindow* window, int* lineCount,
-	LineBoltSegment* lboltPtr, TriangleBoltSegment* tboltPtr, std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr);
+	LineBoltSegment* lboltPtr, TriangleBoltSegment* tboltPtr, vec3* bplpPtr, std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr);
+// Config
 void ConfigureWindow();
 void RenderImGui();
 GLFWwindow* CreateWindow();
@@ -130,6 +136,11 @@ int main() {
 		DefineTriangleBolt(tboltPtr, lightningPatternPtr);
 		break;
 	}
+
+	vec3 boltPointLightPositions[100];
+	vec3 *boltPointLightPositionsPtr;
+	boltPointLightPositionsPtr = &boltPointLightPositions[0];
+	PositionBoltPointLights(boltPointLightPositionsPtr, lightningPatternPtr);
 	// ---------------
 
 	// Shaders
@@ -245,7 +256,7 @@ int main() {
 		// -----------------------
 		ProcessKeyboardInput(window);
 		ProcessMiscInput(window, &firstMouseKeyPress);	// TODO: move GUI stuff into separate file
-		ProcessLightningControlInput(window, &lineCount, lboltPtr, tboltPtr, lightningPatternPtr);
+		ProcessLightningControlInput(window, &lineCount, lboltPtr, tboltPtr, boltPointLightPositionsPtr, lightningPatternPtr);
 
 		// Render Lightning
 		// -----------
@@ -282,16 +293,19 @@ int main() {
 		// Point Lights - for testing, will be moved to bolts later
 		// ------------------
 		lightShader.Use();
-		for (int i = 0; i < 4; i++) {
+		for (int i = 0; i < 100; i++) {
 			model = mat4(1.0f);
-			model = glm::translate(model, pointLightPositions[i]);
-			model = glm::scale(model, vec3(0.5f));
+			model = glm::translate(model, boltPointLightPositions[i]);
+			// vec3 pos = (boltPointLightPositionsPtr)[i];
+			///std::cout << "pos: " << pos.x << "," << pos.y << "," << pos.z << std::endl;
+			//std::cout << "Light Pos: " << (boltPointLightPositionsPtr)[i].x << ", " << (boltPointLightPositionsPtr)[i].y << ", " << (boltPointLightPositionsPtr)[i].z << std::endl;
+			model = glm::scale(model, vec3(0.3f));
 			SetMVPMatricies(lightShader, model, view, projection);
 			RenderCube();
 		}
 		// Objects
 		// ---------------
-
+		/*
 		// multiple spot light properties for object shader
 		objectMultiLightShader.Use();
 		vec3 slColor = vec3(1, 1, 0);	// light color
@@ -316,6 +330,33 @@ int main() {
 			objectMultiLightShader.SetFloat(pointLight + "liner", slLinear);
 			objectMultiLightShader.SetFloat(pointLight + "quadratic", slQuadratic);
 		}
+		*/
+		// point lights positioned along the blot
+		// light properties
+		objectMultiLightShader.Use();
+		vec3 slColor = vec3(1, 1, 0);	// light color
+		vec3 slDiffuse = slColor * vec3(0.5f);
+		vec3 slAmbient = slDiffuse * vec3(0.2f);
+		vec3 slSpecular = vec3(1.0f, 1.0f, 1.0f);
+		float slConstant = 1.0f;
+		float slLinear = 0.22f;
+		float slQuadratic = 0.20f;
+		// camera
+		objectMultiLightShader.SetVec3("viewPos", GetCameraPos());
+		// set each spot light properties
+		for (int i = 0; i < 100; i++) {
+			std::ostringstream stream;
+			stream << "pointLights[" << i << "].";
+			std::string pointLight = stream.str(); // pointLight = "poingLights[i]."
+			objectMultiLightShader.SetVec3(pointLight + "position", boltPointLightPositionsPtr[i]);
+			objectMultiLightShader.SetVec3(pointLight + "ambient", slAmbient);
+			objectMultiLightShader.SetVec3(pointLight + "diffuse", slDiffuse);
+			objectMultiLightShader.SetVec3(pointLight + "specular", slSpecular);
+			objectMultiLightShader.SetFloat(pointLight + "constant", slConstant);
+			objectMultiLightShader.SetFloat(pointLight + "liner", slLinear);
+			objectMultiLightShader.SetFloat(pointLight + "quadratic", slQuadratic);
+		}
+
 		// material properties
 		vec3 mColor = vec3(0.3, 0.3, 0.3);	// material color
 		vec3 mDiffuse = mColor * vec3(0.5f);
@@ -325,7 +366,7 @@ int main() {
 		objectMultiLightShader.SetVec3("material.diffuse", mDiffuse);
 		objectMultiLightShader.SetVec3("material.specular", mSpecular); // dosen't really take effect
 		objectMultiLightShader.SetFloat("material.shininess", 32.0f);
-		// floor
+
 		model = mat4(1.0f);
 		SetMVPMatricies(objectMultiLightShader, model, view, projection);
 		// wall
@@ -405,7 +446,7 @@ void SetMVPMatricies(Shader shader, mat4 model, mat4 view, mat4 projection) {
 	shader.SetMat4("projection", projection);
 }
 
-// Bolt segment Setup - TODO: 
+// Bolt segment Setup
 // -------------
 int DefineBoltLines(LineBoltSegment* lboltPtr, std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr) {
 	for (int i = 0; i < numSegmentsInPattern - 1; i++) {
@@ -417,6 +458,13 @@ int DefineBoltLines(LineBoltSegment* lboltPtr, std::shared_ptr<glm::vec3[numSegm
 void DefineTriangleBolt(TriangleBoltSegment* tboltPtr, std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr) {
 	for (int i = 0; i < numSegmentsInPattern - 1; i++) {
 		tboltPtr[i].Setup(lightningPatternPtr[i], lightningPatternPtr[i + 1]);
+	}
+}
+
+void PositionBoltPointLights(vec3* lightPositionsPtr, std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr) {
+	for (int i = 0; i < 100; i++) {
+		*(lightPositionsPtr + i) = lightningPatternPtr[i];
+
 	}
 }
 // ----------------
@@ -468,14 +516,16 @@ void ProcessMiscInput(GLFWwindow* window, bool* firstButtonPress) {
 bool spaceHeld = false;
 // ProcessLightningControlInput, process inputs relating to control of the lightning
 void ProcessLightningControlInput(GLFWwindow* window, int* lineCount,
-	LineBoltSegment* lboltPtr, TriangleBoltSegment* tboltPtr, std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr) {
+	LineBoltSegment* lboltPtr, TriangleBoltSegment* tboltPtr, vec3* bplpPtr, std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr) {
 
 	// recalculate lines	TODO: method choices should choose between lines and tbolts
 	if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS && !spaceHeld) {
 		std::cout << "New Strike" << std::endl;
 		spaceHeld = true;
-
 		lightningPatternPtr = GenerateLightningPattern(glm::vec3(400, 8000, 0));
+		// bolt light positions
+		PositionBoltPointLights(bplpPtr, lightningPatternPtr);
+		// bolt pattern positions
 		switch (methods[methodChoice]) {
 		case Lines:
 			*lineCount = DefineBoltLines(lboltPtr, lightningPatternPtr);
@@ -485,6 +535,11 @@ void ProcessLightningControlInput(GLFWwindow* window, int* lineCount,
 			break;
 		}
 		strikeStartTime = glfwGetTime();
+
+		// output light positions
+		for (int i = 0; i < 100; i++) {
+			std::cout << "Light Position: " << bplpPtr[i].x << ", " << bplpPtr[i].y << ", " << bplpPtr[i].z << std::endl;
+		}
 	}
 	else if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_RELEASE) {
 		spaceHeld = false;
