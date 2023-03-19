@@ -137,22 +137,22 @@ int main() {
 	std::string projectBase = ProjectBasePath();
 	//std::cout << "Project Base Path: " << projectBase << std::endl;
 
-	std::string boltVertexPath = projectBase + "\\Shader\\bolt.vs";
-	std::string boltFragmentPath = projectBase + "\\Shader\\bolt.fs";
+	std::string boltVertexPath = projectBase + "\\Shader\\VertexShaders\\bolt.vs";
+	std::string boltFragmentPath = projectBase + "\\Shader\\FragmentShaders\\bolt.fs";
 
-	std::string screenVertexPath = projectBase + "\\Shader\\screen.vs";
-	std::string screenFragmentPath = projectBase + "\\Shader\\screen.fs";
+	std::string screenVertexPath = projectBase + "\\Shader\\VertexShaders\\screen.vs";
+	std::string screenFragmentPath = projectBase + "\\Shader\\FragmentShaders\\screen.fs";
 
-	std::string blurVertexPath = projectBase + "\\Shader\\blur.vs";
-	std::string blurFragmentPath = projectBase + "\\Shader\\blur.fs";
+	std::string blurVertexPath = projectBase + "\\Shader\\VertexShaders\\blur.vs";
+	std::string blurFragmentPath = projectBase + "\\Shader\\FragmentShaders\\blur.fs";
 
-	std::string lightVartexPath = projectBase + "\\Shader\\light.vs";
-	std::string lightFragmentPath = projectBase + "\\Shader\\light.fs";
+	std::string lightVartexPath = projectBase + "\\Shader\\VertexShaders\\light.vs";
+	std::string lightFragmentPath = projectBase + "\\Shader\\FragmentShaders\\light.fs";
 
-	std::string objectVertexPath = projectBase + "\\Shader\\object.vs";
-	std::string objectFragmentPath = projectBase + "\\Shader\\object.fs";
+	std::string objectVertexPath = projectBase + "\\Shader\\VertexShaders\\object.vs";
+	std::string objectFragmentPath = projectBase + "\\Shader\\FragmentShaders\\object.fs";
 
-	std::string objectMultipleLightsFragmentPath = projectBase + "\\Shader\\multiple_lights_object.fs";
+	std::string objectMultipleLightsFragmentPath = projectBase + "\\Shader\\FragmentShaders\\multiple_lights_object.fs";
 
 	// bolts
 	Shader boltShader(boltVertexPath.c_str(), boltFragmentPath.c_str());
