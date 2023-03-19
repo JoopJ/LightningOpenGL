@@ -63,7 +63,7 @@ bool lightBoxesEnable = false;
 enum Method { Lines, TrianglesColor };
 Method methods[2] = { Lines, TrianglesColor };
 const char* methodNames[2] = { "Line", "TriangleColor" };
-int methodChoice = 1;
+int methodChoice = 0;
 
 // function prototypes
 // MVP Setters
@@ -312,15 +312,15 @@ int main() {
 
 		// light properties
 		objectMultiLightShader.Use();
-		vec3 slColor = vec3(1, 1, 0);	// light color
-		vec3 slDiffuse = slColor * vec3(0.5f);
-		vec3 slAmbient = slDiffuse * vec3(0.2f);
-		vec3 slSpecular = vec3(1.0f, 1.0f, 1.0f);
+		vec3 plColor = vec3(1, 1, 0);	// light color
+		vec3 plDiffuse = plColor * vec3(0.5f);
+		vec3 plAmbient = plDiffuse * vec3(0.2f);
+		vec3 plSpecular = vec3(1.0f, 1.0f, 1.0f);
 		vec3 aO = attenuationOptions[attenuationChoice];
-		float slConstant = 1.0f;
+		float plConstant = 1.0f;
 		atteunationRadius = aO.x;
-		float slLinear = aO.y;
-		float slQuadratic = aO.z;
+		float plLinear = aO.y;
+		float plQuadratic = aO.z;
 		// camera
 		objectMultiLightShader.SetVec3("viewPos", GetCameraPos());
 		// set each spot light properties
@@ -329,12 +329,12 @@ int main() {
 			stream << "pointLights[" << i << "].";
 			std::string pointLight = stream.str(); // pointLight = "poingLights[i]."
 			objectMultiLightShader.SetVec3(pointLight + "position", boltPointLightPositionsPtr[i]);
-			objectMultiLightShader.SetVec3(pointLight + "ambient", slAmbient);
-			objectMultiLightShader.SetVec3(pointLight + "diffuse", slDiffuse);
-			objectMultiLightShader.SetVec3(pointLight + "specular", slSpecular);
-			objectMultiLightShader.SetFloat(pointLight + "constant", slConstant);
-			objectMultiLightShader.SetFloat(pointLight + "liner", slLinear);
-			objectMultiLightShader.SetFloat(pointLight + "quadratic", slQuadratic);
+			objectMultiLightShader.SetVec3(pointLight + "ambient", plAmbient);
+			objectMultiLightShader.SetVec3(pointLight + "diffuse", plDiffuse);
+			objectMultiLightShader.SetVec3(pointLight + "specular", plSpecular);
+			objectMultiLightShader.SetFloat(pointLight + "constant", plConstant);
+			objectMultiLightShader.SetFloat(pointLight + "liner", plLinear);
+			objectMultiLightShader.SetFloat(pointLight + "quadratic", plQuadratic);
 		}
 		// material properties
 		vec3 mColor = vec3(0.3, 0.3, 0.3);	// material color
