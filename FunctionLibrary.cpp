@@ -34,6 +34,10 @@ unsigned int LoadTexture(const char* path) {
 	unsigned int textureID;
 	glGenTextures(1, &textureID);
 
+	std::string projectBase = ProjectBasePath();
+	std::string fullPath = projectBase + path;
+	path = fullPath.c_str();
+
 	int width, height, nrChannels;
 	unsigned char* data = stbi_load(path, &width, &height, &nrChannels, 3);
 	if (stbi_failure_reason())

@@ -55,6 +55,7 @@ double strikeStartTime;
 const vec3 startPnt = vec3(400, 8000, 0);
 // post processing
 int amount = 1;
+float exposure = 1.0f;
 // lighting options
 int attenuationChoice = 3;
 int atteunationRadius;
@@ -64,8 +65,8 @@ bool strike = false;
 bool hideBolts = false;
 double waitDuration = 2;
 double flashDuration = 0.5;
-double flashFadeDuration = 1.5;
-double darknessDuration = 3.5;
+double flashFadeDuration = 1.3;
+double darknessDuration = 2.5;
 int newBoltProb = 5;
 // Strike Part, manages the different parts of the strike
 enum StrikePart { Wait, Flash, Fade, Darkness };
@@ -118,6 +119,11 @@ int main() {
 		return -1;
 	}
 	InitImGui(window);
+
+	// Load Textures
+	// ---------------
+	unsigned int metalWallTexture = LoadTexture("\\Textures\\metal_wall.png");
+	// ---------------
 
 	// Input
 	// ---------------
@@ -186,6 +192,9 @@ int main() {
 	// lighting
 	Shader lightShader(lightVartexPath.c_str(), lightFragmentPath.c_str());
 	Shader objectMultiLightShader(objectVertexPath.c_str(), objectMultipleLightsFragmentPath.c_str());
+	
+	objectMultiLightShader.Use();
+	objectMultiLightShader.SetInt("material.diffuse", 0);
 	// ---------------
 
 	// Lighting
@@ -296,10 +305,21 @@ int main() {
 		// Strike Simulation Logic
 		if (strike) {
 			timer += GetDeltaTime();
+			fluxTimer += GetDeltaTime();
+			if (fluxTimer > fluxTime) {
+				fluxTimer = 0;
+				flux = 1 - 2 * (rand() % 2);
+				if (flux < 0) {
+					hideBolts = true;
+				} else {
+					hideBolts = false;
+				}
+			}
 			switch (strikePart) {
 			case Wait:
 				if (timer > waitDuration) {
 					strikePart = Flash;
+					hideBolts = false;
 					timer = 0;
 					break;
 				}
@@ -313,7 +333,6 @@ int main() {
 					timer = 0;
 					break;
 				}
-				hideBolts = false;
 				range = 100 + flux * 100 * (flashDuration - timer);
 				linear = 4.5 / range;
 				quadratic = 75.0 / (range * range);
@@ -425,6 +444,9 @@ int main() {
 			boltPointLightPositionsPtr, linear, quadratic, plColor);
 		// material
 		SetShaderMaterialProperties(objectMultiLightShader, wallColor, 32.0f);
+		// bind diffuse map
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, metalWallTexture);
 		// walls - using point lights
 		model = mat4(1.0f);
 		SetMVPMatricies(objectMultiLightShader, model, view, projection);
@@ -467,6 +489,7 @@ int main() {
 		glDisable(GL_DEPTH_TEST);
 
 		screenShader.Use();
+		screenShader.SetFloat("exposure", exposure);
 		glBindTexture(GL_TEXTURE_2D, pingpongBuffer[!horizontal]);
 		RenderQuad();
 
@@ -644,10 +667,12 @@ void RenderImGui() {
 	ImGui::Begin("Post Processing");
 	if (!strike) {
 		ImGui::SliderInt("Blur Amount", &amount, 0, 20);
+		ImGui::SliderFloat("Exposure", &exposure, 0.1, 100);
 	}
 	else {
 		ImGui::Text("Striking");
 	}
+
 	ImGui::End();
 
 	ImGui::Begin("Lighting");
