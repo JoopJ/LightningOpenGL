@@ -65,6 +65,18 @@ unsigned int LoadTexture(const char* path) {
 	return textureID;
 }
 
+// setting MVPs
+void SetVPMatricies(Shader shader, mat4 view, mat4 projection) {
+	// camera and projection setting
+	shader.SetMat4("view", view);
+	shader.SetMat4("projection", projection);
+}
+void SetMVPMatricies(Shader shader, mat4 model, mat4 view, mat4 projection) {
+	shader.SetMat4("model", model);
+	shader.SetMat4("view", view);
+	shader.SetMat4("projection", projection);
+}
+
 void BindBoltTexture() {
 	glBindTexture(GL_TEXTURE_2D, boltTexture);
 }
