@@ -56,6 +56,7 @@ const vec3 startPnt = vec3(400, 8000, 0);
 // post processing
 int amount = 1;
 float exposure = 1.0f;
+bool bloom = true;
 // lighting options
 int attenuationChoice = 3;
 int atteunationRadius;
@@ -64,10 +65,9 @@ vec3 boltColor = vec3(1.0f, 1.0f, 0.0f);
 bool strike = false;
 bool hideBolts = false;
 double waitDuration = 2;
-double flashDuration = 0.5;
-double flashFadeDuration = 1.3;
-double darknessDuration = 2.5;
-int newBoltProb = 5;
+double flashDuration = 0.3;
+double flashFadeDuration = 2;
+double darknessDuration = 1.3;
 // Strike Part, manages the different parts of the strike
 enum StrikePart { Wait, Flash, Fade, Darkness };
 StrikePart strikePart = Wait;
@@ -195,6 +195,9 @@ int main() {
 	
 	objectMultiLightShader.Use();
 	objectMultiLightShader.SetInt("material.diffuse", 0);
+	screenShader.Use();
+	screenShader.SetInt("screenTexture", 0);
+	screenShader.SetInt("bloomBlur", 1);
 	// ---------------
 
 	// Lighting
@@ -218,7 +221,7 @@ int main() {
 	// Properties
 	// ---------------
 	// Point Light
-	vec3 plColor = vec3(1, 1, 0);	// point light color (lightning light color)
+	vec3 plColor = vec3(1, 1, 1);	// point light color (lightning light color)
 	// Wall
 	vec3 wallColor = vec3(0.3, 0.3, 0.3);	// material color
 	// Postprocessing
@@ -286,12 +289,14 @@ int main() {
 	// attenuation
 	float linear;
 	float quadratic;
+	float alpha = 1.0f;
 	double timer = 0;
 	double range;
-	double fluxTime = 0.05;
+	double fluxTime = 0.1;
 	double fluxTimer = fluxTime;
 	double flux = 1;
-	newBoltProb = 100 - newBoltProb;
+	int newBoltProb = 4;
+	float count = 0;
 	// -----------------
 
 	// render loop
@@ -304,28 +309,39 @@ int main() {
 
 		// Strike Simulation Logic
 		if (strike) {
+			double diff;
+			range = 1;
 			timer += GetDeltaTime();
 			fluxTimer += GetDeltaTime();
 			if (fluxTimer > fluxTime) {
+				NewBolt(lboltPtr, tboltPtr, boltPointLightPositionsPtr, lightningPatternPtr);
 				fluxTimer = 0;
 				flux = 1 - 2 * (rand() % 2);
 				if (flux < 0) {
 					hideBolts = true;
+					range -= 50;
+					exposure -= 3;
 				} else {
 					hideBolts = false;
+					range += 80;
+					exposure += 3;
 				}
 			}
+
 			switch (strikePart) {
 			case Wait:
 				if (timer > waitDuration) {
 					strikePart = Flash;
 					hideBolts = false;
 					timer = 0;
+					exposure = 3.1;
+					count = 0;
 					break;
 				}
 				hideBolts = true;
-				linear = 0.9;
-				quadratic = 2;
+				amount = 3;
+				exposure = 0.1;
+				range = 1;
 				break;
 			case Flash:
 				if (timer > flashDuration) {
@@ -333,21 +349,23 @@ int main() {
 					timer = 0;
 					break;
 				}
-				range = 100 + flux * 100 * (flashDuration - timer);
-				linear = 4.5 / range;
-				quadratic = 75.0 / (range * range);
-				amount = 3 + 5 * (flashDuration - timer);
+				diff = flashDuration - timer;
+				range = 32 + count * flux;
+				count += 0.2;
+				//amount = 1 + 5 * diff;
 				break;
 			case Fade:
 				if (timer > flashFadeDuration) {
 					strikePart = Darkness;
 					timer = 0;
+					exposure = 2;
+					range = 1;
 					break;
 				}
-				range = 100 * flux * (flashFadeDuration - timer);
-				linear = 4.5 / range;
-				quadratic = 75.0 / (range * range);
-				amount = 1 + 3 * (flashFadeDuration - timer);				break;
+				diff = flashFadeDuration - timer;
+				range -= 0.1;
+				exposure -= (rand() % 2) * 0.02;
+				break;
 			case Darkness:
 				if (timer > darknessDuration) {
 					strikePart = Wait;
@@ -357,14 +375,16 @@ int main() {
 					break;
 				}
 				hideBolts = true;
-				linear = 0.9;
-				quadratic = 2;
+				range = 1;
 				amount = 1;
+				exposure -= 0.1;
 				break;
 			}
-			if (strikePart == Flash && (rand() % 100 > newBoltProb)) {
+			if ((strikePart == Flash || strikePart == Fade) && (rand() % 100 < newBoltProb)) {
 				NewBolt(lboltPtr, tboltPtr, boltPointLightPositionsPtr, lightningPatternPtr);
 			}
+			linear = 4.5 / range;
+			quadratic = 75 / (range*range);
 		}
 		// -----------------------
 
@@ -489,8 +509,12 @@ int main() {
 		glDisable(GL_DEPTH_TEST);
 
 		screenShader.Use();
-		screenShader.SetFloat("exposure", exposure);
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, tcbo[0]);
+		glActiveTexture(GL_TEXTURE1);
 		glBindTexture(GL_TEXTURE_2D, pingpongBuffer[!horizontal]);
+		screenShader.SetBool("bloom", bloom);
+		screenShader.SetFloat("exposure", exposure);
 		RenderQuad();
 
 		// ---------------

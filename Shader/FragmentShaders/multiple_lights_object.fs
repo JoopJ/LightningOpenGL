@@ -1,6 +1,7 @@
 #version 460 core 
 
-out vec4 FragColor;
+layout (location = 0) out vec4 FragColor;
+layout (location = 1) out vec4 BrightColor;
 
 struct Material {
     sampler2D diffuse;
@@ -40,6 +41,14 @@ void main() {
     vec3 result = vec3(0.0);
     for (int i = 0; i < NR_POINT_LIGHTS; i++)
         result += CalcPointLight(pointLights[i], norm, FragPos, viewDir);
+
+
+    // check whether result is higher than some threshold, if so, output as bloom threshol color
+    float brightness = dot(result, vec3(0.2126, 0.7152, 0.0722));
+    if (brightness > 1.0)
+        BrightColor = vec4(result, 1.0);
+    else 
+        BrightColor = vec4(0, 0, 0, 1);
 
     FragColor = vec4(result, 1.0);
 }
