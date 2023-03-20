@@ -19,4 +19,3 @@ void SetMVPMatricies(Shader shader, mat4 model, mat4 view, mat4 projection);
 void BindBoltTexture();
 vec3 ConvertWorldToScreen(vec3 pos);
 void SetWidthAndHeight(unsigned int width, unsigned int height);
-

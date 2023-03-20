@@ -104,15 +104,17 @@ void RenderCube() {
 
 void RenderFloor() {
 	if (floorVAO == 0) {
+		float width = 100.0f;
+		float height = -70.0f;
 		float floorVertices[48] = {
 			// positions          // normals           // texture coords
-			25.0f, -0.5f, 25.0f,  0.0f, 1.0f, 0.0f,   25.0f, 0.0f,
-			-25.0f, -0.5f, 25.0f,  0.0f, 1.0f, 0.0f,   0.0f, 0.0f,
-			-25.0f, -0.5f, -25.0f,  0.0f, 1.0f, 0.0f,   0.0f, 25.0f,
+			width, height, width,  0.0f, 1.0f, 0.0f,   25.0f, 0.0f,
+			-width, height, width,  0.0f, 1.0f, 0.0f,   0.0f, 0.0f,
+			-width, height, -width,  0.0f, 1.0f, 0.0f,   0.0f, 25.0f,
 
-			25.0f, -0.5f, 25.0f,  0.0f, 1.0f, 0.0f,   25.0f, 0.0f,
-			-25.0f, -0.5f, -25.0f,  0.0f, 1.0f, 0.0f,   0.0f, 25.0f,
-			25.0f, -0.5f, -25.0f,  0.0f, 1.0f, 0.0f,   25.0f, 25.0f
+			width, height, width,  0.0f, 1.0f, 0.0f,   25.0f, 0.0f,
+			-width, height, -width,  0.0f, 1.0f, 0.0f,   0.0f, 25.0f,
+			width, height, -width,  0.0f, 1.0f, 0.0f,   25.0f, 25.0f
 		};
 		unsigned int floorVBO;
 		glGenVertexArrays(1, &floorVAO);
@@ -139,15 +141,18 @@ void RenderFloor() {
 
 void RenderWall() {
 	if (wallVAO == 0) {
+		float width = 100.0f;
+		float height = width;
+		float offset = 50.0f;
 		float wallVertices[]{
 			// positions          // normals
-			25.0f,  25.5f, 15.0f,  0.0f, 0.0f, -1.0f,
-			-25.0f,  25.5f, 15.0f,  0.0f, 0.0f, -1.0f,
-			-25.0f, -25.5f, 15.0f,  0.0f, 0.0f, -1.0f,
+			width,  height, offset,  0.0f, 0.0f, -1.0f,
+			-width,  height, offset,  0.0f, 0.0f, -1.0f,
+			-width, -height, offset,  0.0f, 0.0f, -1.0f,
 
-			25.0f,  25.5f, 15.0f,  0.0f, 0.0f, -1.0f,
-			-25.0f, -25.5f, 15.0f,  0.0f, 0.0f, -1.0f,
-			25.0f, -25.5f, 15.0f,  0.0f, 0.0f, -1.0f,
+			width,  height, offset,  0.0f, 0.0f, -1.0f,
+			-width, -height, offset,  0.0f, 0.0f, -1.0f,
+			width, -height, offset,  0.0f, 0.0f, -1.0f,
 		};
 
 		unsigned int wallVBO;

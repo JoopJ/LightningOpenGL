@@ -58,6 +58,14 @@ int amount = 1;
 // lighting options
 int attenuationChoice = 3;
 int atteunationRadius;
+vec3 boltColor = vec3(1.0f, 1.0f, 0.0f);
+// Strike Simulation
+bool strike = false;
+bool hideBolts = false;
+double strikeDuration = 0;
+double flashDuration = 0.5;
+double flashFadeDuration = 1.5;
+double darknessDuration = 3.5;
 
 // Debuging
 bool lightBoxesEnable = false;
@@ -256,6 +264,19 @@ int main() {
 	}
 	// ----------------
 
+	// Strike Simulation
+	// -----------------
+
+	// bolt properties
+	// attenuation
+	float linear;
+	float quadratic;
+	double range;
+	double fluxTime = 0.05;
+	double fluxTimer = fluxTime;
+	double flux = 1;
+	// -----------------
+
 	// render loop
 	while (!glfwWindowShouldClose(window)) {
 		// pre-frame time logic
@@ -263,6 +284,39 @@ int main() {
 		float currentFrame = static_cast<float>(glfwGetTime());
 		SetDeltaTime(currentFrame - GetLastFrame());
 		SetLastFrame(currentFrame);
+
+		// strike calculations
+		if (strike) {
+			strikeDuration += GetDeltaTime();
+			fluxTimer -= GetDeltaTime();
+			if (fluxTimer < 0) {
+				flux = 1 - 2 * (rand() % 2);
+				fluxTimer = fluxTime + fluxTime * 0.2 * (rand() % 6);
+			}
+			if (strikeDuration < flashDuration) {	// flash is occuring
+
+				range = 100 + flux * 100 * (flashDuration - strikeDuration);
+				linear = 4.5 / range;
+				quadratic = 75.0 / (range * range);
+				amount = 3 + 5 * (flashDuration - strikeDuration);
+			}
+			else if (strikeDuration < flashFadeDuration) {
+				range = 100 * flux * (flashFadeDuration - strikeDuration);
+				linear = 4.5 / range;
+				quadratic = 75.0 / (range * range);
+				amount = 1 + 3 * (flashFadeDuration - strikeDuration);
+			}
+			else if (strikeDuration < darknessDuration) {
+				hideBolts = true;
+				linear = 0.9;
+				quadratic = 2;
+				amount = 1;
+			}
+			else {
+				strike = false;
+				hideBolts = false;
+			}
+		}
 
 		// input
 		// -----------------------
@@ -286,19 +340,21 @@ int main() {
 
 		// Drawing
 		// Bolts
-		boltShader.Use();
-		boltShader.SetVec3("color", vec3(1, 1, 0));
-		switch (methods[methodChoice]) {
-		case Lines:
-			// Line Bolt
-			SetVPMatricies(boltShader, view, projection);
-			DrawLineBolt(lboltPtr);
-			break;
-		case TrianglesColor:
-			// Color Triangle Bolt
-			SetVPMatricies(boltShader, view, projection);
-			DrawTriangleBolt(tboltPtr);
-			break;
+		if (!hideBolts) {	// need to hide bolts when simulating a strike
+			boltShader.Use();
+			boltShader.SetVec3("color", boltColor);
+			switch (methods[methodChoice]) {
+			case Lines:
+				// Line Bolt
+				SetVPMatricies(boltShader, view, projection);
+				DrawLineBolt(lboltPtr);
+				break;
+			case TrianglesColor:
+				// Color Triangle Bolt
+				SetVPMatricies(boltShader, view, projection);
+				DrawTriangleBolt(tboltPtr);
+				break;
+			}
 		}
 		// ------------------		
 		// Objects
@@ -322,27 +378,34 @@ int main() {
 		objectMultiLightShader.Use();
 		// get attenuation options
 		// x = radius, y = linear, z = quadratic
-		vec3 attenuation = attenuationOptions[attenuationChoice];
-		atteunationRadius = attenuation.x;
+
+		if (!strike) {
+			vec3 attenuation = attenuationOptions[attenuationChoice];
+			atteunationRadius = attenuation.x;
+			linear = attenuation.y;
+			quadratic = attenuation.z;
+		}
 		// camera
 		objectMultiLightShader.SetVec3("viewPos", GetCameraPos());
 
 		// set properties
 		// spot lights
 		SetShaderPointLightProperties(objectMultiLightShader, numSegmentsInPattern,
-			boltPointLightPositionsPtr, attenuation.y, attenuation.z, plColor);
+			boltPointLightPositionsPtr, linear, quadratic, plColor);
 		// material
 		SetShaderMaterialProperties(objectMultiLightShader, wallColor, 32.0f);
 		// walls - using point lights
 		model = mat4(1.0f);
 		SetMVPMatricies(objectMultiLightShader, model, view, projection);
 		RenderWall();
+		RenderFloor();
+		/*
 		// render 3 more walls, to make a square room
 		for (int i = 0; i < 3; i++) {
 			model = glm::rotate(model, glm::radians(90.0f), vec3(0, 1, 0));
 			objectMultiLightShader.SetMat4("model", model);
 			RenderWall();
-		}
+		} */
 		// ---------------
 		
 		// Post Processing
@@ -350,7 +413,7 @@ int main() {
 		// Blur
 		bool horizontal = true, first_iteration = true;
 		blurShader.Use();
-		for (int i = 0; i < amount; i++)
+		for (int i = 0; i < amount+1; i++)
 		{
 			glBindFramebuffer(GL_FRAMEBUFFER, pingpongFBO[horizontal]);
 			blurShader.SetInt("horizontal", horizontal);
@@ -403,6 +466,11 @@ int main() {
 	//glfw: terminate, clearing all previously allocated GLFW resources.
 	glfwTerminate();
 	return 0;
+}
+
+void StartStrike() {
+	strikeDuration = 0;
+	strike = true;
 }
 
 // Bolt segment Setup
@@ -530,13 +598,21 @@ void RenderImGui() {
 	ImGui::End();
 
 	ImGui::Begin("Post Processing");
-	ImGui::SliderInt("Blur Amount", &amount, 1, 100);
+	if (!strike) {
+		ImGui::SliderInt("Blur Amount", &amount, 0, 20);
+	}
+	else {
+		ImGui::Text("Striking");
+	}
 	ImGui::End();
 
 	ImGui::Begin("Lighting");
 	ImGui::Text("Attenuation");
 	ImGui::Text("Radius: %d", atteunationRadius);
 	ImGui::SliderInt("##", &attenuationChoice, 0, 11);
+	if (ImGui::Button("Strike")) {
+		StartStrike();
+	}
 	ImGui::End();
 
 	ImGui::Render();
