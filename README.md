@@ -29,8 +29,6 @@ Triangle Color - uses coloured triangle primitives
 
 ### TODO:
 
-- Make lightning bolt source of light
-
-- HDR
+- Bloom
 
 - Deferred Rendering for large number of lights from bolt
