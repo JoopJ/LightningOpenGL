@@ -34,6 +34,10 @@ unsigned int LoadTexture(const char* path) {
 	unsigned int textureID;
 	glGenTextures(1, &textureID);
 
+	std::string projectBase = ProjectBasePath();
+	std::string fullPath = projectBase + path;
+	path = fullPath.c_str();
+
 	int width, height, nrChannels;
 	unsigned char* data = stbi_load(path, &width, &height, &nrChannels, 3);
 	if (stbi_failure_reason())
@@ -63,6 +67,18 @@ unsigned int LoadTexture(const char* path) {
 	stbi_image_free(data);
 
 	return textureID;
+}
+
+// setting MVPs
+void SetVPMatricies(Shader shader, mat4 view, mat4 projection) {
+	// camera and projection setting
+	shader.SetMat4("view", view);
+	shader.SetMat4("projection", projection);
+}
+void SetMVPMatricies(Shader shader, mat4 model, mat4 view, mat4 projection) {
+	shader.SetMat4("model", model);
+	shader.SetMat4("view", view);
+	shader.SetMat4("projection", projection);
 }
 
 void BindBoltTexture() {

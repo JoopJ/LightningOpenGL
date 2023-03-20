@@ -38,8 +38,10 @@ ImGui is used for the GUI which allows editting of various variables used to gen
 #include "BoltGeneration/TriangleBoltSegment.h"
 #include "BoltGeneration/LightningPatterns.h"
 #include "Shader/Shader.h"
+#include "Shader/ShaderSetup.h"
 #include "FunctionLibrary.h"
 #include "CameraControl.h"
+#include "Renderer.h"
 
 using glm::vec3;
 using glm::mat4;
@@ -53,24 +55,49 @@ double strikeStartTime;
 const vec3 startPnt = vec3(400, 8000, 0);
 // post processing
 int amount = 1;
-// light
-vec3 lightPos(1.2f, 5.0f, 2.0f);
+float exposure = 1.0f;
+// lighting options
+int attenuationChoice = 3;
+int atteunationRadius;
+vec3 boltColor = vec3(1.0f, 1.0f, 0.0f);
+// Strike Simulation
+bool strike = false;
+bool hideBolts = false;
+double waitDuration = 2;
+double flashDuration = 0.5;
+double flashFadeDuration = 1.3;
+double darknessDuration = 2.5;
+int newBoltProb = 5;
+// Strike Part, manages the different parts of the strike
+enum StrikePart { Wait, Flash, Fade, Darkness };
+StrikePart strikePart = Wait;
+
+// Debuging
+bool lightBoxesEnable = false;
 
 enum Method { Lines, TrianglesColor };
 Method methods[2] = { Lines, TrianglesColor };
 const char* methodNames[2] = { "Line", "TriangleColor" };
-int methodChoice = 1;
+int methodChoice = 0;
 
 // function prototypes
+// MVP Setters
 void SetMVPMatricies(Shader shader, mat4 model, mat4 view, mat4 porjection);
 void SetVPMatricies(Shader shader, mat4 view, mat4 projection);
-int DefineBoltLines(LineBoltSegment* lboltPtr, std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr);
+// Define Bolt
+void DefineBoltLines(LineBoltSegment* lboltPtr, std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr);
 void DefineTriangleBolt(TriangleBoltSegment* tboltPtr, std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr);
+void PositionBoltPointLights(vec3* lightPositionsPtr, std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr);
+void NewBolt(LineBoltSegment* lboltPtr, TriangleBoltSegment* tboltPtr, vec3* lightPositionsPtr,
+	std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr);
+// Drawing
 void DrawTriangleBolt(TriangleBoltSegment* tboltPtr);
 void DrawLineBolt(LineBoltSegment* lboltPtr);
+// Input
 void ProcessMiscInput(GLFWwindow* window, bool* firstButtonPress);
-void ProcessLightningControlInput(GLFWwindow* window, int* lineCount,
-	LineBoltSegment* lboltPtr, TriangleBoltSegment* tboltPtr, std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr);
+void ProcessLightningControlInput(GLFWwindow* window,
+	LineBoltSegment* lboltPtr, TriangleBoltSegment* tboltPtr, vec3* bplpPtr, std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr);
+// Config
 void ConfigureWindow();
 void RenderImGui();
 GLFWwindow* CreateWindow();
@@ -78,6 +105,8 @@ void InitImGui(GLFWwindow* window);
 // renderers
 void RenderQuad();
 void RenderCube();
+void RenderFloor();
+void RenderWall();
 
 int main() {
 	// Initial Configurations and Window Creation
@@ -90,7 +119,11 @@ int main() {
 		return -1;
 	}
 	InitImGui(window);
-	// ------------------------
+
+	// Load Textures
+	// ---------------
+	unsigned int metalWallTexture = LoadTexture("\\Textures\\metal_wall.png");
+	// ---------------
 
 	// Input
 	// ---------------
@@ -106,13 +139,16 @@ int main() {
 	// Bolt Objects
 	// ---------------
 	// Lines	- Colored line primatives
-	LineBoltSegment boltLines[2000];
+	LineBoltSegment boltLines[numSegmentsInPattern];
 	LineBoltSegment* lboltPtr = &boltLines[0];
-	int lineCount = 0;
 	// Triangles - Colored triangle primatives
 	TriangleBoltSegment* tboltPtr;
 	TriangleBoltSegment tsegments[numSegmentsInPattern];
 	tboltPtr = &tsegments[0];
+	// Point Lights - Point lights at each point in the lightning pattern
+	vec3 boltPointLightPositions[numSegmentsInPattern];
+	vec3* boltPointLightPositionsPtr;
+	boltPointLightPositionsPtr = &boltPointLightPositions[0];
 	// ---------------
 
 	// Lightning Pattern
@@ -121,93 +157,70 @@ int main() {
 	std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr;
 	// initial setting of pattern
 	lightningPatternPtr = GenerateLightningPattern(glm::vec3(400, 8000, 0));
-	switch (methods[methodChoice]) {
-	case Lines:
-		lineCount = DefineBoltLines(lboltPtr, lightningPatternPtr);
-		break;
-	case TrianglesColor:
-		DefineTriangleBolt(tboltPtr, lightningPatternPtr);
-		break;
-	}
+	DefineBoltLines(lboltPtr, lightningPatternPtr);
+	DefineTriangleBolt(tboltPtr, lightningPatternPtr);
+	PositionBoltPointLights(boltPointLightPositionsPtr, lightningPatternPtr);
 	// ---------------
 
 	// Shaders
 	// ---------------
 	std::string projectBase = ProjectBasePath();
+	//std::cout << "Project Base Path: " << projectBase << std::endl;
 
-	std::string boltTriangleVertexPath = projectBase + "\\Shader\\bolt_triangle_color.vs";
-	std::string boltTriangleFragmentPath = projectBase + "\\Shader\\bolt_triangle_color.fs";
+	std::string boltVertexPath = projectBase + "\\Shader\\VertexShaders\\bolt.vs";
+	std::string boltFragmentPath = projectBase + "\\Shader\\FragmentShaders\\bolt.fs";
 
-	std::string boltLineVertexPath = projectBase + "\\Shader\\bolt_line.vs";
-	std::string boltLineFragmentPath = projectBase + "\\Shader\\bolt_line.fs";
+	std::string screenVertexPath = projectBase + "\\Shader\\VertexShaders\\screen.vs";
+	std::string screenFragmentPath = projectBase + "\\Shader\\FragmentShaders\\screen.fs";
 
-	std::string screenVertexPath = projectBase + "\\Shader\\screen.vs";
-	std::string screenFragmentPath = projectBase + "\\Shader\\screen.fs";
+	std::string blurVertexPath = projectBase + "\\Shader\\VertexShaders\\blur.vs";
+	std::string blurFragmentPath = projectBase + "\\Shader\\FragmentShaders\\blur.fs";
 
-	std::string blurVertexPath = projectBase + "\\Shader\\blur.vs";
-	std::string blurFragmentPath = projectBase + "\\Shader\\blur.fs";
+	std::string lightVartexPath = projectBase + "\\Shader\\VertexShaders\\light.vs";
+	std::string lightFragmentPath = projectBase + "\\Shader\\FragmentShaders\\light.fs";
 
-	std::string lightVartexPath = projectBase + "\\Shader\\light.vs";
-	std::string lightFragmentPath = projectBase + "\\Shader\\light.fs";
+	std::string objectVertexPath = projectBase + "\\Shader\\VertexShaders\\object.vs";
+	std::string objectFragmentPath = projectBase + "\\Shader\\FragmentShaders\\object.fs";
 
-	std::string objectVertexPath = projectBase + "\\Shader\\object.vs";
-	std::string objectFragmentPath = projectBase + "\\Shader\\object.fs";
-
-	//std::cout << "Vertex Path: " << vertexPath << std::endl;
-	//std::cout << "Fragment Path: " << fragmentPath << std::endl;
+	std::string objectMultipleLightsFragmentPath = projectBase + "\\Shader\\FragmentShaders\\multiple_lights_object.fs";
 
 	// bolts
-	Shader boltTriangleShader(boltTriangleVertexPath.c_str(), boltTriangleFragmentPath.c_str());
-	Shader boltLineShader(boltLineVertexPath.c_str(), boltLineFragmentPath.c_str());
+	Shader boltShader(boltVertexPath.c_str(), boltFragmentPath.c_str());
 	// post processing
 	Shader screenShader(screenVertexPath.c_str(), screenFragmentPath.c_str());
 	Shader blurShader(blurVertexPath.c_str(), blurFragmentPath.c_str());
 	// lighting
 	Shader lightShader(lightVartexPath.c_str(), lightFragmentPath.c_str());
-	Shader objectShader(objectVertexPath.c_str(), objectFragmentPath.c_str());
+	Shader objectMultiLightShader(objectVertexPath.c_str(), objectMultipleLightsFragmentPath.c_str());
+	
+	objectMultiLightShader.Use();
+	objectMultiLightShader.SetInt("material.diffuse", 0);
 	// ---------------
 
-	// Textures
-	// ---------------
-	// LoadTexture("");
-	// ---------------
-
-	// Lightning
-	// ---------------
-
-	// Scene Objects
-	// ---------------
-	// Floor
-	float floorVertices[48] = {
-		// positions          // normals           // texture coords
-		25.0f, -0.5f, 25.0f,  0.0f, 1.0f, 0.0f,   25.0f, 0.0f,
-		-25.0f, -0.5f, 25.0f,  0.0f, 1.0f, 0.0f,   0.0f, 0.0f,
-		-25.0f, -0.5f, -25.0f,  0.0f, 1.0f, 0.0f,   0.0f, 25.0f,
-
-		25.0f, -0.5f, 25.0f,  0.0f, 1.0f, 0.0f,   25.0f, 0.0f,
-		-25.0f, -0.5f, -25.0f,  0.0f, 1.0f, 0.0f,   0.0f, 25.0f,
-		25.0f, -0.5f, -25.0f,  0.0f, 1.0f, 0.0f,   25.0f, 25.0f
+	// Lighting
+	// -------------------------
+	vec3 attenuationOptions[12] = {
+		vec3(7, 0.7, 1.8),
+		vec3(13, 0.35, 0.44),
+		vec3(20, 0.22, 0.20),
+		vec3(32, 0.14, 0.07),
+		vec3(50, 0.09, 0.032),
+		vec3(65, 0.07, 0.017),
+		vec3(100, 0.045, 0.0075),
+		vec3(160, 0.027, 0.0028),
+		vec3(200, 0.022, 0.0019),
+		vec3(325, 0.014, 0.0007),
+		vec3(600, 0.007, 0.0002),
+		vec3(3250, 0.0014, 0.000007)
 	};
-	unsigned int floorVAO, floorVBO;
-	glGenVertexArrays(1, &floorVAO);
-	glGenBuffers(1, &floorVBO);
-	glBindVertexArray(floorVAO);
-	glBindBuffer(GL_ARRAY_BUFFER, floorVBO);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(floorVertices), floorVertices, GL_STATIC_DRAW);
+	// ------------------------
 
-	glBindVertexArray(floorVAO);
-	// position attribute
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);
-	glEnableVertexAttribArray(0);
-	// normal attribute
-	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(3 * sizeof(float)));
-	glEnableVertexAttribArray(1);
-	// texture coord attribute
-	glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(6 * sizeof(float)));
-	glEnableVertexAttribArray(2);
-	// -------------
-
-
+	// Properties
+	// ---------------
+	// Point Light
+	vec3 plColor = vec3(1, 1, 0);	// point light color (lightning light color)
+	// Wall
+	vec3 wallColor = vec3(0.3, 0.3, 0.3);	// material color
 	// Postprocessing
 	// ---------------
 	// framebuffer object
@@ -215,15 +228,19 @@ int main() {
 	glGenFramebuffers(1, &fbo);
 	glBindFramebuffer(GL_FRAMEBUFFER, fbo);
 
-	// texture color buffer object
-	unsigned int tcbo;
+	// texture color buffer objects
+	unsigned int tcbo[2];
 	// genereate and attach to framebuffer object (fbo)
-	glGenTextures(1, &tcbo);
-	glBindTexture(GL_TEXTURE_2D, tcbo);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, SCR_WIDTH, SCR_HEIGHT, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, tcbo, 0);
+	glGenTextures(2, tcbo);
+	for (unsigned int i = 0; i < 2; i++) {
+		glBindTexture(GL_TEXTURE_2D, tcbo[i]);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, SCR_WIDTH, SCR_HEIGHT, 0, GL_RGBA, GL_FLOAT, NULL);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, tcbo[i], 0);
+	}
 
 	// depth and stencil buffer object
 	unsigned int rbo; // can be a renderbuffer object as we don't need to sample from it
@@ -234,13 +251,14 @@ int main() {
 	glBindRenderbuffer(GL_RENDERBUFFER, 0);
 	// attach to the framebuffer object (fbo)
 	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, rbo);
+	// tell opengl to render to multiple colorbuffers
+	unsigned int attachments[2] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
+	glDrawBuffers(2, attachments);
 
 	// check fbo is complete
 	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
 		std::cout << "ERROR::FRAMEBUFFER:: Framebuffer is not complete!" << std::endl;
 	}
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
 	// ping pong buffers
@@ -261,40 +279,108 @@ int main() {
 	}
 	// ----------------
 
+	// Strike Simulation
+	// -----------------
+
+	// bolt properties
+	// attenuation
+	float linear;
+	float quadratic;
+	double timer = 0;
+	double range;
+	double fluxTime = 0.05;
+	double fluxTimer = fluxTime;
+	double flux = 1;
+	newBoltProb = 100 - newBoltProb;
+	// -----------------
+
 	// render loop
 	while (!glfwWindowShouldClose(window)) {
-		// set background color
-		glClearColor(0.0, 0.5, 1.0, 1.0);
-		glClear(GL_COLOR_BUFFER_BIT);
-
 		// pre-frame time logic
 		// -----------------------
 		float currentFrame = static_cast<float>(glfwGetTime());
 		SetDeltaTime(currentFrame - GetLastFrame());
 		SetLastFrame(currentFrame);
 
+		// Strike Simulation Logic
+		if (strike) {
+			timer += GetDeltaTime();
+			fluxTimer += GetDeltaTime();
+			if (fluxTimer > fluxTime) {
+				fluxTimer = 0;
+				flux = 1 - 2 * (rand() % 2);
+				if (flux < 0) {
+					hideBolts = true;
+				} else {
+					hideBolts = false;
+				}
+			}
+			switch (strikePart) {
+			case Wait:
+				if (timer > waitDuration) {
+					strikePart = Flash;
+					hideBolts = false;
+					timer = 0;
+					break;
+				}
+				hideBolts = true;
+				linear = 0.9;
+				quadratic = 2;
+				break;
+			case Flash:
+				if (timer > flashDuration) {
+					strikePart = Fade;
+					timer = 0;
+					break;
+				}
+				range = 100 + flux * 100 * (flashDuration - timer);
+				linear = 4.5 / range;
+				quadratic = 75.0 / (range * range);
+				amount = 3 + 5 * (flashDuration - timer);
+				break;
+			case Fade:
+				if (timer > flashFadeDuration) {
+					strikePart = Darkness;
+					timer = 0;
+					break;
+				}
+				range = 100 * flux * (flashFadeDuration - timer);
+				linear = 4.5 / range;
+				quadratic = 75.0 / (range * range);
+				amount = 1 + 3 * (flashFadeDuration - timer);				break;
+			case Darkness:
+				if (timer > darknessDuration) {
+					strikePart = Wait;
+					timer = 0;
+					strike = false;
+					hideBolts = false;
+					break;
+				}
+				hideBolts = true;
+				linear = 0.9;
+				quadratic = 2;
+				amount = 1;
+				break;
+			}
+			if (strikePart == Flash && (rand() % 100 > newBoltProb)) {
+				NewBolt(lboltPtr, tboltPtr, boltPointLightPositionsPtr, lightningPatternPtr);
+			}
+		}
+		// -----------------------
+
 		// input
 		// -----------------------
 		ProcessKeyboardInput(window);
 		ProcessMiscInput(window, &firstMouseKeyPress);	// TODO: move GUI stuff into separate file
-		ProcessLightningControlInput(window, &lineCount, lboltPtr, tboltPtr, lightningPatternPtr);
+		ProcessLightningControlInput(window, lboltPtr, tboltPtr, boltPointLightPositionsPtr, lightningPatternPtr);
 
 		// Render Lightning
 		// -----------
 		// 
-		// MVP (no model's atm)
+		// MVP
+		mat4 model;
 		mat4 view = lookAt(GetCameraPos(), GetCameraPos() + GetCameraFront(), GetCameraUp());
 		mat4 projection = glm::perspective(glm::radians(GetFOV()), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.0f);
-		// Strike Timing
-		/*
-		double strikeDuration = 0.1;
-		// draw lines one by one over time
-		double currentTime = glfwGetTime();
-		int numLinesToDraw = std::min((int)((currentTime - strikeStartTime) / (strikeDuration / lineCount)), lineCount);
-		if (numLinesToDraw != lineCount) {
-			std::cout << numLinesToDraw << std::endl;
-		}
-		*/
 
 		// first pass, to framebuffer object (fbo)
 		glBindFramebuffer(GL_FRAMEBUFFER, fbo);
@@ -303,69 +389,88 @@ int main() {
 		glEnable(GL_DEPTH_TEST);
 
 		// Drawing
-		switch (methods[methodChoice]) {
-		case Lines:
-			// Line Bolt
-			boltLineShader.Use();
-			boltLineShader.SetVec3("color", vec3(1, 1, 0));
-			SetVPMatricies(boltLineShader, view, projection);
-			DrawLineBolt(lboltPtr);
-			break;
-		case TrianglesColor:
-			// Color Triangle Bolt
-			boltTriangleShader.Use();
-			SetVPMatricies(boltTriangleShader, view, projection);
-			DrawTriangleBolt(tboltPtr);
-			break;
+		// Bolts
+		if (!hideBolts) {	// need to hide bolts when simulating a strike
+			boltShader.Use();
+			boltShader.SetVec3("color", boltColor);
+			switch (methods[methodChoice]) {
+			case Lines:
+				// Line Bolt
+				SetVPMatricies(boltShader, view, projection);
+				DrawLineBolt(lboltPtr);
+				break;
+			case TrianglesColor:
+				// Color Triangle Bolt
+				SetVPMatricies(boltShader, view, projection);
+				DrawTriangleBolt(tboltPtr);
+				break;
+			}
 		}
-		// light
-		lightShader.Use();
-		mat4 model = mat4(1.0f);
-		model = glm::translate(model, lightPos);
-		model = glm::scale(model, vec3(2));
-		SetMVPMatricies(lightShader, model, view, projection);
-		RenderCube();
+		// ------------------		
+		// Objects
+		// ---------------
+		// point lights positioned along the bolt
+		if (lightBoxesEnable) {
+			lightShader.Use();
+			for (int i = 0; i < 100; i++) {
+				model = mat4(1.0f);
+				model = glm::translate(model, boltPointLightPositions[i]);
+				// vec3 pos = (boltPointLightPositionsPtr)[i];
+				///std::cout << "pos: " << pos.x << "," << pos.y << "," << pos.z << std::endl;
+				//std::cout << "Light Pos: " << (boltPointLightPositionsPtr)[i].x << ", " << (boltPointLightPositionsPtr)[i].y << ", " << (boltPointLightPositionsPtr)[i].z << std::endl;
+				model = glm::scale(model, vec3(0.1f));
+				SetMVPMatricies(lightShader, model, view, projection);
+				RenderCube();
+			}
+		}
 
-		// floor
-		objectShader.Use();
-		objectShader.SetVec3("light.position", lightPos);
-		objectShader.SetVec3("viewPos", GetCameraPos());
-		// light properties
-		vec3 lightColor = vec3(1.0, 1.0, 1.0);
-		vec3 diffuseColor = lightColor * vec3(0.5f); // decrease the influence
-		vec3 ambientColor = diffuseColor * vec3(0.2f); // low influence
-		objectShader.SetVec3("light.ambient", ambientColor);
-		objectShader.SetVec3("light.diffuse", diffuseColor);
-		objectShader.SetVec3("light.specular", vec3(1.0f, 1.0f, 1.0f));
-		// attenuation
-		objectShader.SetFloat("light.constant", 1.0f);
-		objectShader.SetFloat("light.linear", 0.09f);
-		objectShader.SetFloat("light.quadratic", 0.032f);
-		// material properties 
-		objectShader.SetVec3("material.ambient", vec3(0.5f, 0.5f, 0.5f));
-		objectShader.SetVec3("material.diffuse", vec3(0.5f, 0.5f, 0.5f));
-		objectShader.SetVec3("material.specular", vec3(0.5f, 0.5f, 0.5f));
-		objectShader.SetFloat("material.shininess", 32.0f);
+		// point lights and walls
+		objectMultiLightShader.Use();
+		// get attenuation options
+		// x = radius, y = linear, z = quadratic
 
-		// view / projection transformations
+		if (!strike) {
+			vec3 attenuation = attenuationOptions[attenuationChoice];
+			atteunationRadius = attenuation.x;
+			linear = attenuation.y;
+			quadratic = attenuation.z;
+		}
+		// camera
+		objectMultiLightShader.SetVec3("viewPos", GetCameraPos());
+
+		// set properties
+		// spot lights
+		SetShaderPointLightProperties(objectMultiLightShader, numSegmentsInPattern,
+			boltPointLightPositionsPtr, linear, quadratic, plColor);
+		// material
+		SetShaderMaterialProperties(objectMultiLightShader, wallColor, 32.0f);
+		// bind diffuse map
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, metalWallTexture);
+		// walls - using point lights
 		model = mat4(1.0f);
-		SetMVPMatricies(objectShader, model, view, projection);
-
-		// render
-		glBindVertexArray(floorVAO);
-		glDrawArrays(GL_TRIANGLES, 0, 6);
-
+		SetMVPMatricies(objectMultiLightShader, model, view, projection);
+		RenderWall();
+		RenderFloor();
+		// render 2 more walls, to make a square room
+		for (int i = 0; i < 2; i++) {
+			model = glm::rotate(model, glm::radians(90.0f), vec3(0, 1, 0));
+			objectMultiLightShader.SetMat4("model", model);
+			RenderWall();
+		}
+		// ---------------
+		
 		// Post Processing
 		// ---------------
 		// Blur
 		bool horizontal = true, first_iteration = true;
 		blurShader.Use();
-		for (int i = 0; i < amount; i++)
+		for (int i = 0; i < amount+1; i++)
 		{
 			glBindFramebuffer(GL_FRAMEBUFFER, pingpongFBO[horizontal]);
 			blurShader.SetInt("horizontal", horizontal);
 			// bind texutre of other framebuffer, or scene if first iteration
-			glBindTexture(GL_TEXTURE_2D, first_iteration ? tcbo : pingpongBuffer[!horizontal]);
+			glBindTexture(GL_TEXTURE_2D, first_iteration ? tcbo[1] : pingpongBuffer[!horizontal]);
 			// render quad
 			RenderQuad();
 			// swap buffers
@@ -384,6 +489,7 @@ int main() {
 		glDisable(GL_DEPTH_TEST);
 
 		screenShader.Use();
+		screenShader.SetFloat("exposure", exposure);
 		glBindTexture(GL_TEXTURE_2D, pingpongBuffer[!horizontal]);
 		RenderQuad();
 
@@ -397,8 +503,13 @@ int main() {
 		glfwSwapBuffers(window);
 		glfwPollEvents();
 	}
-
+	// deleter buffers
 	glDeleteBuffers(1, &fbo);
+	glDeleteBuffers(1, &rbo);
+	glDeleteBuffers(1, &tcbo[0]);
+	glDeleteBuffers(1, &tcbo[1]);
+	glDeleteBuffers(1, &pingpongBuffer[0]);
+	glDeleteBuffers(1, &pingpongBuffer[1]);
 
 	// imgui: shutdown and cleanup
 	ImGui_ImplOpenGL3_Shutdown();
@@ -410,30 +521,44 @@ int main() {
 	return 0;
 }
 
-void SetVPMatricies(Shader shader, mat4 view, mat4 projection) {
-	// camera and projection setting
-	shader.SetMat4("view", view);
-	shader.SetMat4("projection", projection);
+void StartStrike() {
+	strike = true;
 }
 
-void SetMVPMatricies(Shader shader, mat4 model, mat4 view, mat4 projection) {
-	shader.SetMat4("model", model);
-	shader.SetMat4("view", view);
-	shader.SetMat4("projection", projection);
-}
-
-// Bolt segment Setup - TODO: 
+// Bolt segment Setup
 // -------------
-int DefineBoltLines(LineBoltSegment* lboltPtr, std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr) {
+void DefineBoltLines(LineBoltSegment* lboltPtr, std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr) {
 	for (int i = 0; i < numSegmentsInPattern - 1; i++) {
 		lboltPtr[i].Setup(lightningPatternPtr[i], lightningPatternPtr[i + 1]);
 	}
-	return numSegmentsInPattern;
 }
 
 void DefineTriangleBolt(TriangleBoltSegment* tboltPtr, std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr) {
 	for (int i = 0; i < numSegmentsInPattern - 1; i++) {
 		tboltPtr[i].Setup(lightningPatternPtr[i], lightningPatternPtr[i + 1]);
+	}
+}
+
+void PositionBoltPointLights(vec3* lightPositionsPtr, std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr) {
+	for (int i = 0; i < 100; i++) {
+		*(lightPositionsPtr + i) = lightningPatternPtr[i];
+
+	}
+}
+
+void NewBolt(LineBoltSegment* lboltPtr, TriangleBoltSegment* tboltPtr, vec3* lightPositionsPtr, 
+	std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr) {
+	lightningPatternPtr = GenerateLightningPattern(glm::vec3(400, 8000, 0));
+	// bolt point light positions
+	PositionBoltPointLights(lightPositionsPtr, lightningPatternPtr);
+	// bolt pattern positions
+	switch (methods[methodChoice]) {
+	case Lines:
+		DefineBoltLines(lboltPtr, lightningPatternPtr);
+		break;
+	case TrianglesColor:
+		DefineTriangleBolt(tboltPtr, lightningPatternPtr);
+		break;
 	}
 }
 // ----------------
@@ -484,24 +609,25 @@ void ProcessMiscInput(GLFWwindow* window, bool* firstButtonPress) {
 
 bool spaceHeld = false;
 // ProcessLightningControlInput, process inputs relating to control of the lightning
-void ProcessLightningControlInput(GLFWwindow* window, int* lineCount,
-	LineBoltSegment* lboltPtr, TriangleBoltSegment* tboltPtr, std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr) {
+void ProcessLightningControlInput(GLFWwindow* window,
+	LineBoltSegment* lboltPtr, TriangleBoltSegment* tboltPtr, vec3* bplpPtr, std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr) {
 
 	// recalculate lines	TODO: method choices should choose between lines and tbolts
 	if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS && !spaceHeld) {
 		std::cout << "New Strike" << std::endl;
 		spaceHeld = true;
-
 		lightningPatternPtr = GenerateLightningPattern(glm::vec3(400, 8000, 0));
+		// bolt point light positions
+		PositionBoltPointLights(bplpPtr, lightningPatternPtr);
+		// bolt pattern positions
 		switch (methods[methodChoice]) {
 		case Lines:
-			*lineCount = DefineBoltLines(lboltPtr, lightningPatternPtr);
+			DefineBoltLines(lboltPtr, lightningPatternPtr);
 			break;
 		case TrianglesColor:
 			DefineTriangleBolt(tboltPtr, lightningPatternPtr);
 			break;
 		}
-		strikeStartTime = glfwGetTime();
 	}
 	else if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_RELEASE) {
 		spaceHeld = false;
@@ -530,12 +656,32 @@ void RenderImGui() {
 	//ImGui::Begin("Lightning");
 	//GUINaiveApproach();
 
-	// Camera Control window
-	ImGui::Begin("Options");
-	ImGui::Text("Lightning Options:");
+	// Bolt Control window
+	ImGui::Begin("Bolt Options");
 	ImGui::Combo("Methods", &methodChoice, methodNames, IM_ARRAYSIZE(methodNames));	// dosen't work
-	ImGui::SliderInt("Blur Amount", &amount, 1, 100);
+	if (ImGui::Button("Show Light Positions")) {
+		lightBoxesEnable = !lightBoxesEnable;
+	}
+	ImGui::End();
 
+	ImGui::Begin("Post Processing");
+	if (!strike) {
+		ImGui::SliderInt("Blur Amount", &amount, 0, 20);
+		ImGui::SliderFloat("Exposure", &exposure, 0.1, 100);
+	}
+	else {
+		ImGui::Text("Striking");
+	}
+
+	ImGui::End();
+
+	ImGui::Begin("Lighting");
+	ImGui::Text("Attenuation");
+	ImGui::Text("Radius: %d", atteunationRadius);
+	ImGui::SliderInt("##", &attenuationChoice, 0, 11);
+	if (ImGui::Button("Strike")) {
+		StartStrike();
+	}
 	ImGui::End();
 
 	ImGui::Render();
@@ -567,98 +713,3 @@ void InitImGui(GLFWwindow* window) {
 	ImGui_ImplOpenGL3_Init("#version 460");
 }
 
-unsigned int quadVAO = 0;
-void RenderQuad() {
-	if (quadVAO == 0) {	// setup
-		float quadVertices[] = {	// fills whole screen in NDC;
-			// positions   // texCoords
-			-1.0f,  1.0f,  0.0f, 1.0f,
-			-1.0f, -1.0f,  0.0f, 0.0f,
-			 1.0f, -1.0f,  1.0f, 0.0f,
-
-			-1.0f,  1.0f,  0.0f, 1.0f,
-			 1.0f, -1.0f,  1.0f, 0.0f,
-			 1.0f,  1.0f,  1.0f, 1.0f
-		};
-		unsigned int quadVBO;
-		glGenVertexArrays(1, &quadVAO);
-		glGenBuffers(1, &quadVBO);
-		glBindVertexArray(quadVAO);
-		glBindBuffer(GL_ARRAY_BUFFER, quadVBO);
-		glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), &quadVertices, GL_STATIC_DRAW);
-		glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
-		glEnableVertexAttribArray(0);
-		glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
-		glEnableVertexAttribArray(1);
-	}
-	glBindVertexArray(quadVAO);
-	glDrawArrays(GL_TRIANGLES, 0, 6);
-	glBindVertexArray(0);
-}
-
-unsigned int cubeVAO = 0;
-void RenderCube() {
-	if (cubeVAO == 0) {
-		float cubeVertices[] = { // setup
-			-0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
-			 0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
-			 0.5f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
-			 0.5f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
-			-0.5f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
-			-0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
-
-			-0.5f, -0.5f,  0.5f,  0.0f,  0.0f,  1.0f,
-			 0.5f, -0.5f,  0.5f,  0.0f,  0.0f,  1.0f,
-			 0.5f,  0.5f,  0.5f,  0.0f,  0.0f,  1.0f,
-			 0.5f,  0.5f,  0.5f,  0.0f,  0.0f,  1.0f,
-			-0.5f,  0.5f,  0.5f,  0.0f,  0.0f,  1.0f,
-			-0.5f, -0.5f,  0.5f,  0.0f,  0.0f,  1.0f,
-
-			-0.5f,  0.5f,  0.5f, -1.0f,  0.0f,  0.0f,
-			-0.5f,  0.5f, -0.5f, -1.0f,  0.0f,  0.0f,
-			-0.5f, -0.5f, -0.5f, -1.0f,  0.0f,  0.0f,
-			-0.5f, -0.5f, -0.5f, -1.0f,  0.0f,  0.0f,
-			-0.5f, -0.5f,  0.5f, -1.0f,  0.0f,  0.0f,
-			-0.5f,  0.5f,  0.5f, -1.0f,  0.0f,  0.0f,
-
-			 0.5f,  0.5f,  0.5f,  1.0f,  0.0f,  0.0f,
-			 0.5f,  0.5f, -0.5f,  1.0f,  0.0f,  0.0f,
-			 0.5f, -0.5f, -0.5f,  1.0f,  0.0f,  0.0f,
-			 0.5f, -0.5f, -0.5f,  1.0f,  0.0f,  0.0f,
-			 0.5f, -0.5f,  0.5f,  1.0f,  0.0f,  0.0f,
-			 0.5f,  0.5f,  0.5f,  1.0f,  0.0f,  0.0f,
-
-			-0.5f, -0.5f, -0.5f,  0.0f, -1.0f,  0.0f,
-			 0.5f, -0.5f, -0.5f,  0.0f, -1.0f,  0.0f,
-			 0.5f, -0.5f,  0.5f,  0.0f, -1.0f,  0.0f,
-			 0.5f, -0.5f,  0.5f,  0.0f, -1.0f,  0.0f,
-			-0.5f, -0.5f,  0.5f,  0.0f, -1.0f,  0.0f,
-			-0.5f, -0.5f, -0.5f,  0.0f, -1.0f,  0.0f,
-
-			-0.5f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f,
-			 0.5f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f,
-			 0.5f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f,
-			 0.5f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f,
-			-0.5f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f,
-			-0.5f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f
-		};
-
-		unsigned int cubeVBO;
-		glGenVertexArrays(1, &cubeVAO);
-		glGenBuffers(1, &cubeVBO);
-		glBindVertexArray(cubeVAO);
-		glBindBuffer(GL_ARRAY_BUFFER, cubeVBO);
-		glBufferData(GL_ARRAY_BUFFER, sizeof(cubeVertices), cubeVertices, GL_STATIC_DRAW);
-		glBindVertexArray(cubeVAO);
-
-		// position attribute
-		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
-		glEnableVertexAttribArray(0);
-		// no normal for light sources
-	}
-
-	glBindVertexArray(cubeVAO);
-	glDrawArrays(GL_TRIANGLES, 0, 36);
-	glBindVertexArray(0);
-
-}

@@ -29,10 +29,8 @@ Triangle Color - uses coloured triangle primitives
 
 ### TODO:
 
-- Move Line shader into Shader object
-
 - Make lightning bolt source of light
 
 - HDR
 
-- Defered Rendering for large number of lights from bolt
+- Deferred Rendering for large number of lights from bolt
