@@ -38,6 +38,7 @@ ImGui is used for the GUI which allows editting of various variables used to gen
 #include "BoltGeneration/TriangleBoltSegment.h"
 #include "BoltGeneration/LightningPatterns.h"
 #include "Shader/Shader.h"
+#include "Shader/ShaderSetup.h"
 #include "FunctionLibrary.h"
 #include "CameraControl.h"
 
@@ -124,7 +125,7 @@ int main() {
 	TriangleBoltSegment tsegments[numSegmentsInPattern];
 	tboltPtr = &tsegments[0];
 	// Point Lights - Point lights at each point in the lightning pattern
-	vec3 boltPointLightPositions[100];
+	vec3 boltPointLightPositions[numSegmentsInPattern];
 	vec3* boltPointLightPositionsPtr;
 	boltPointLightPositionsPtr = &boltPointLightPositions[0];
 	// ---------------
@@ -190,6 +191,12 @@ int main() {
 	};
 	// ------------------------
 
+	// Properties
+	// ---------------
+	// Point Light
+	vec3 plColor = vec3(1, 1, 0);	// point light color (lightning light color)
+	// Wall
+	vec3 wallColor = vec3(0.3, 0.3, 0.3);	// material color
 	// Postprocessing
 	// ---------------
 	// framebuffer object
@@ -310,58 +317,31 @@ int main() {
 			}
 		}
 
-		// light properties
+		// point lights and walls
 		objectMultiLightShader.Use();
-		vec3 plColor = vec3(1, 1, 0);	// light color
-		vec3 plDiffuse = plColor * vec3(0.5f);
-		vec3 plAmbient = plDiffuse * vec3(0.2f);
-		vec3 plSpecular = vec3(1.0f, 1.0f, 1.0f);
-		vec3 aO = attenuationOptions[attenuationChoice];
-		float plConstant = 1.0f;
-		atteunationRadius = aO.x;
-		float plLinear = aO.y;
-		float plQuadratic = aO.z;
+		// get attenuation options
+		// x = radius, y = linear, z = quadratic
+		vec3 attenuation = attenuationOptions[attenuationChoice];
+		atteunationRadius = attenuation.x;
 		// camera
 		objectMultiLightShader.SetVec3("viewPos", GetCameraPos());
-		// set each spot light properties
-		for (int i = 0; i < 100; i++) {
-			std::ostringstream stream;
-			stream << "pointLights[" << i << "].";
-			std::string pointLight = stream.str(); // pointLight = "poingLights[i]."
-			objectMultiLightShader.SetVec3(pointLight + "position", boltPointLightPositionsPtr[i]);
-			objectMultiLightShader.SetVec3(pointLight + "ambient", plAmbient);
-			objectMultiLightShader.SetVec3(pointLight + "diffuse", plDiffuse);
-			objectMultiLightShader.SetVec3(pointLight + "specular", plSpecular);
-			objectMultiLightShader.SetFloat(pointLight + "constant", plConstant);
-			objectMultiLightShader.SetFloat(pointLight + "liner", plLinear);
-			objectMultiLightShader.SetFloat(pointLight + "quadratic", plQuadratic);
-		}
-		// material properties
-		vec3 mColor = vec3(0.3, 0.3, 0.3);	// material color
-		vec3 mDiffuse = mColor * vec3(0.5f);
-		vec3 mAmbient = mDiffuse * vec3(0.2f);
-		vec3 mSpecular = vec3(1.0f, 1.0f, 1.0f);
-		objectMultiLightShader.SetVec3("material.ambient", mAmbient);
-		objectMultiLightShader.SetVec3("material.diffuse", mDiffuse);
-		objectMultiLightShader.SetVec3("material.specular", mSpecular); // dosen't really take effect
-		objectMultiLightShader.SetFloat("material.shininess", 32.0f);
 
-		objectMultiLightShader.SetVec3("objectColor", vec3(0, 0, 0));
-
-		// walls
+		// set properties
+		// spot lights
+		SetShaderPointLightProperties(objectMultiLightShader, numSegmentsInPattern,
+			boltPointLightPositionsPtr, attenuation.y, attenuation.z, plColor);
+		// material
+		SetShaderMaterialProperties(objectMultiLightShader, wallColor, 32.0f);
+		// walls - using point lights
 		model = mat4(1.0f);
 		SetMVPMatricies(objectMultiLightShader, model, view, projection);
 		RenderWall();
-		model = glm::rotate(model, glm::radians(90.0f), vec3(0, 1, 0));
-		objectMultiLightShader.SetMat4("model", model);
-		RenderWall();
-		model = glm::rotate(model, glm::radians(90.0f), vec3(0, 1, 0));
-		objectMultiLightShader.SetMat4("model", model);
-		RenderWall();
-		model = glm::rotate(model, glm::radians(90.0f), vec3(0, 1, 0));
-		objectMultiLightShader.SetMat4("model", model);
-		RenderWall();
-
+		// render 3 more walls, to make a square room
+		for (int i = 0; i < 3; i++) {
+			model = glm::rotate(model, glm::radians(90.0f), vec3(0, 1, 0));
+			objectMultiLightShader.SetMat4("model", model);
+			RenderWall();
+		}
 		// ---------------
 		
 		// Post Processing
