@@ -143,7 +143,7 @@ void RenderWall() {
 	if (wallVAO == 0) {
 		float width = 100.0f;
 		float height = width;
-		float offset = 50.0f;
+		float offset = 30.0f;
 		float wallVertices[]{
 			// positions          // normals
 			width,  height, offset,  0.0f, 0.0f, -1.0f,

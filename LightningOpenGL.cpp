@@ -62,10 +62,14 @@ vec3 boltColor = vec3(1.0f, 1.0f, 0.0f);
 // Strike Simulation
 bool strike = false;
 bool hideBolts = false;
-double strikeDuration = 0;
+double waitDuration = 2;
 double flashDuration = 0.5;
 double flashFadeDuration = 1.5;
 double darknessDuration = 3.5;
+int newBoltProb = 5;
+// Strike Part, manages the different parts of the strike
+enum StrikePart { Wait, Flash, Fade, Darkness };
+StrikePart strikePart = Wait;
 
 // Debuging
 bool lightBoxesEnable = false;
@@ -83,6 +87,8 @@ void SetVPMatricies(Shader shader, mat4 view, mat4 projection);
 void DefineBoltLines(LineBoltSegment* lboltPtr, std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr);
 void DefineTriangleBolt(TriangleBoltSegment* tboltPtr, std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr);
 void PositionBoltPointLights(vec3* lightPositionsPtr, std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr);
+void NewBolt(LineBoltSegment* lboltPtr, TriangleBoltSegment* tboltPtr, vec3* lightPositionsPtr,
+	std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr);
 // Drawing
 void DrawTriangleBolt(TriangleBoltSegment* tboltPtr);
 void DrawLineBolt(LineBoltSegment* lboltPtr);
@@ -271,10 +277,12 @@ int main() {
 	// attenuation
 	float linear;
 	float quadratic;
+	double timer = 0;
 	double range;
 	double fluxTime = 0.05;
 	double fluxTimer = fluxTime;
 	double flux = 1;
+	newBoltProb = 100 - newBoltProb;
 	// -----------------
 
 	// render loop
@@ -285,38 +293,61 @@ int main() {
 		SetDeltaTime(currentFrame - GetLastFrame());
 		SetLastFrame(currentFrame);
 
-		// strike calculations
+		// Strike Simulation Logic
 		if (strike) {
-			strikeDuration += GetDeltaTime();
-			fluxTimer -= GetDeltaTime();
-			if (fluxTimer < 0) {
-				flux = 1 - 2 * (rand() % 2);
-				fluxTimer = fluxTime + fluxTime * 0.2 * (rand() % 6);
-			}
-			if (strikeDuration < flashDuration) {	// flash is occuring
-
-				range = 100 + flux * 100 * (flashDuration - strikeDuration);
+			timer += GetDeltaTime();
+			switch (strikePart) {
+			case Wait:
+				if (timer > waitDuration) {
+					strikePart = Flash;
+					timer = 0;
+					break;
+				}
+				hideBolts = true;
+				linear = 0.9;
+				quadratic = 2;
+				break;
+			case Flash:
+				if (timer > flashDuration) {
+					strikePart = Fade;
+					timer = 0;
+					break;
+				}
+				hideBolts = false;
+				range = 100 + flux * 100 * (flashDuration - timer);
 				linear = 4.5 / range;
 				quadratic = 75.0 / (range * range);
-				amount = 3 + 5 * (flashDuration - strikeDuration);
-			}
-			else if (strikeDuration < flashFadeDuration) {
-				range = 100 * flux * (flashFadeDuration - strikeDuration);
+				amount = 3 + 5 * (flashDuration - timer);
+				break;
+			case Fade:
+				if (timer > flashFadeDuration) {
+					strikePart = Darkness;
+					timer = 0;
+					break;
+				}
+				range = 100 * flux * (flashFadeDuration - timer);
 				linear = 4.5 / range;
 				quadratic = 75.0 / (range * range);
-				amount = 1 + 3 * (flashFadeDuration - strikeDuration);
-			}
-			else if (strikeDuration < darknessDuration) {
+				amount = 1 + 3 * (flashFadeDuration - timer);				break;
+			case Darkness:
+				if (timer > darknessDuration) {
+					strikePart = Wait;
+					timer = 0;
+					strike = false;
+					hideBolts = false;
+					break;
+				}
 				hideBolts = true;
 				linear = 0.9;
 				quadratic = 2;
 				amount = 1;
+				break;
 			}
-			else {
-				strike = false;
-				hideBolts = false;
+			if (strikePart == Flash && (rand() % 100 > newBoltProb)) {
+				NewBolt(lboltPtr, tboltPtr, boltPointLightPositionsPtr, lightningPatternPtr);
 			}
 		}
+		// -----------------------
 
 		// input
 		// -----------------------
@@ -399,13 +430,12 @@ int main() {
 		SetMVPMatricies(objectMultiLightShader, model, view, projection);
 		RenderWall();
 		RenderFloor();
-		/*
-		// render 3 more walls, to make a square room
-		for (int i = 0; i < 3; i++) {
+		// render 2 more walls, to make a square room
+		for (int i = 0; i < 2; i++) {
 			model = glm::rotate(model, glm::radians(90.0f), vec3(0, 1, 0));
 			objectMultiLightShader.SetMat4("model", model);
 			RenderWall();
-		} */
+		}
 		// ---------------
 		
 		// Post Processing
@@ -469,7 +499,6 @@ int main() {
 }
 
 void StartStrike() {
-	strikeDuration = 0;
 	strike = true;
 }
 
@@ -491,6 +520,22 @@ void PositionBoltPointLights(vec3* lightPositionsPtr, std::shared_ptr<glm::vec3[
 	for (int i = 0; i < 100; i++) {
 		*(lightPositionsPtr + i) = lightningPatternPtr[i];
 
+	}
+}
+
+void NewBolt(LineBoltSegment* lboltPtr, TriangleBoltSegment* tboltPtr, vec3* lightPositionsPtr, 
+	std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr) {
+	lightningPatternPtr = GenerateLightningPattern(glm::vec3(400, 8000, 0));
+	// bolt point light positions
+	PositionBoltPointLights(lightPositionsPtr, lightningPatternPtr);
+	// bolt pattern positions
+	switch (methods[methodChoice]) {
+	case Lines:
+		DefineBoltLines(lboltPtr, lightningPatternPtr);
+		break;
+	case TrianglesColor:
+		DefineTriangleBolt(tboltPtr, lightningPatternPtr);
+		break;
 	}
 }
 // ----------------
@@ -560,7 +605,6 @@ void ProcessLightningControlInput(GLFWwindow* window,
 			DefineTriangleBolt(tboltPtr, lightningPatternPtr);
 			break;
 		}
-		strikeStartTime = glfwGetTime();
 	}
 	else if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_RELEASE) {
 		spaceHeld = false;
