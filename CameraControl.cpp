@@ -12,7 +12,7 @@ float lastY = SCR_HEIGHT / 2.0f;
 float fov = 90;
 
 bool firstMouse = true;
-bool mouseEngaged = true;
+bool mouseEngaged = false;
 
 // time
 float deltaTime = 0.0f;

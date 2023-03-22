@@ -13,13 +13,14 @@ void SetShaderPointLightProperties(Shader shader, int numLights, vec3* lightPosP
 	for (int i = 0; i < numLights; i++) {
 		str = "pointLights[" + std::to_string(i) + "].";
 		shader.SetVec3(str + "position", lightPosPtr[i]);
-		shader.SetVec3(str + "ambient", ambient);
-		shader.SetVec3(str + "diffuse", diffuse);
-		shader.SetVec3(str + "specular", specular);
-		shader.SetFloat(str + "constant", 1.0f);
-		shader.SetFloat(str + "linear", linear);
-		shader.SetFloat(str + "quadratic", quadratic);
 	}
+	str = "pointLightProperties.";
+	shader.SetVec3(str + "ambient", ambient);
+	shader.SetVec3(str + "diffuse", diffuse);
+	shader.SetVec3(str + "specular", specular);
+	shader.SetFloat(str + "constant", 1.0f);
+	shader.SetFloat(str + "linear", linear);
+	shader.SetFloat(str + "quadratic", quadratic);
 }
 
 void SetShaderMaterialProperties(Shader shader, vec3 color, float shininess) {

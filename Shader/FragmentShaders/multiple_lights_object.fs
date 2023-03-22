@@ -11,7 +11,10 @@ struct Material {
 
 struct PointLight {
     vec3 position;
+};
 
+struct PointLightProperties {
+    // point light options
     vec3 ambient;
     vec3 diffuse;
     vec3 specular;
@@ -30,8 +33,9 @@ in vec2 TexCoords;
 uniform vec3 viewPos;
 uniform Material material;
 uniform PointLight pointLights[NR_POINT_LIGHTS];
+uniform PointLightProperties pointLightProperties;
 
-vec3 CalcPointLight(PointLight light,vec3 normal, vec3 FragPos, vec3 viewDir);
+vec3 CalcPointLight(PointLight light, PointLightProperties properties, vec3 normal, vec3 FragPos, vec3 viewDir);
 
 void main() {
     // properties
@@ -40,8 +44,7 @@ void main() {
 
     vec3 result = vec3(0.0);
     for (int i = 0; i < NR_POINT_LIGHTS; i++)
-        result += CalcPointLight(pointLights[i], norm, FragPos, viewDir);
-
+        result += CalcPointLight(pointLights[i], pointLightProperties, norm, FragPos, viewDir);
 
     // check whether result is higher than some threshold, if so, output as bloom threshol color
     float brightness = dot(result, vec3(0.2126, 0.7152, 0.0722));
@@ -53,7 +56,7 @@ void main() {
     FragColor = vec4(result, 1.0);
 }
 
-vec3 CalcPointLight(PointLight light, vec3 normal, vec3 fragPos, vec3 viewDir) {
+vec3 CalcPointLight(PointLight light, PointLightProperties properties, vec3 normal, vec3 fragPos, vec3 viewDir) {
     vec3 lightDiff = light.position - fragPos;
     vec3 lightDir = normalize(lightDiff);
 
@@ -64,12 +67,12 @@ vec3 CalcPointLight(PointLight light, vec3 normal, vec3 fragPos, vec3 viewDir) {
     float spec = pow(max(dot(viewDir, reflectDir), 0.0), material.shininess);
     // attenuation
     float distance = length(lightDiff);
-    float attenuation = 1.0 / (light.constant + light.linear * distance + light.quadratic * (distance * distance));
+    float attenuation = 1.0 / (properties.constant + properties.linear * distance + properties.quadratic * (distance * distance));
    
     // combine results
-    vec3 ambient = light.ambient * vec3(texture(material.diffuse, TexCoords));
-    vec3 diffuse = light.diffuse * diff * vec3(texture(material.diffuse, TexCoords));
-    vec3 specular = light.specular * spec * material.specular;
+    vec3 ambient = properties.ambient * vec3(texture(material.diffuse, TexCoords));
+    vec3 diffuse = properties.diffuse * diff * vec3(texture(material.diffuse, TexCoords));
+    vec3 specular = properties.specular * spec * material.specular;
     ambient *= attenuation;
     diffuse *= attenuation;
     specular *= attenuation;

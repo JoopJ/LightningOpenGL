@@ -98,3 +98,16 @@ void SetWidthAndHeight(unsigned int width, unsigned int height) {
 	SCR_WIDTH = width;
 	SCR_HEIGHT = height;
 }
+
+void OutputVec3(vec3 vec) {
+	std::cout << "[" << vec.x << "," << vec.y << "," << vec.z << "]" << std::endl;
+}
+
+void OutputMat4(mat4 mat) {
+	for (int i = 0; i < 4; i++) {
+		for (int j = 0; j < 4; j++) {
+			std::cout << mat[j][i] << " ";
+		}
+		std::cout << std::endl;
+	}
+}

@@ -61,6 +61,7 @@ int attenuationChoice = 3;
 int atteunationRadius;
 float boltAlpha = 1.0f;
 vec3 boltColor = vec3(1.0f, 1.0f, 0.0f);
+float lightPerSeg = 1;	// the number of light boxes, including the start, that are placed per segment
 
 // Debuging
 bool lightBoxesEnable = false;
@@ -77,7 +78,8 @@ void SetVPMatricies(Shader shader, mat4 view, mat4 projection);
 // Define Bolt
 void DefineBoltLines(LineBoltSegment* lboltPtr, std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr);
 void DefineTriangleBolt(TriangleBoltSegment* tboltPtr, std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr);
-void PositionBoltPointLights(vec3* lightPositionsPtr, std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr);
+void PositionBoltPointLights(vec3* lightPositionsPtr, 
+	std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr);
 void NewBolt(LineBoltSegment* lboltPtr, TriangleBoltSegment* tboltPtr, vec3* lightPositionsPtr,
 	std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr);
 // Drawing
@@ -136,7 +138,8 @@ int main() {
 	TriangleBoltSegment tsegments[numSegmentsInPattern];
 	tboltPtr = &tsegments[0];
 	// Point Lights - Point lights at each point in the lightning pattern
-	vec3 boltPointLightPositions[numSegmentsInPattern];
+	const int maxNumPointLights = 3000;
+	vec3 boltPointLightPositions[maxNumPointLights];
 	vec3* boltPointLightPositionsPtr;
 	boltPointLightPositionsPtr = &boltPointLightPositions[0];
 	// ---------------
@@ -344,16 +347,15 @@ int main() {
 		// Objects
 		// ---------------
 		// point lights positioned along the bolt
+
 		if (lightBoxesEnable) {
 			lightShader.Use();
-			for (int i = 0; i < 100; i++) {
+			SetVPMatricies(lightShader, view, projection);
+			for (int i = 0; i < lightPerSeg * numSegmentsInPattern; i++) {
 				model = mat4(1.0f);
 				model = glm::translate(model, boltPointLightPositions[i]);
-				// vec3 pos = (boltPointLightPositionsPtr)[i];
-				///std::cout << "pos: " << pos.x << "," << pos.y << "," << pos.z << std::endl;
-				//std::cout << "Light Pos: " << (boltPointLightPositionsPtr)[i].x << ", " << (boltPointLightPositionsPtr)[i].y << ", " << (boltPointLightPositionsPtr)[i].z << std::endl;
-				model = glm::scale(model, vec3(0.4f));
-				SetMVPMatricies(lightShader, model, view, projection);
+				model = glm::scale(model, vec3(0.3f));
+				lightShader.SetMat4("model", model);
 				RenderCube();
 			}
 		}
@@ -370,7 +372,7 @@ int main() {
 
 		// set properties
 		// spot lights
-		SetShaderPointLightProperties(objectMultiLightShader, numSegmentsInPattern,
+		SetShaderPointLightProperties(objectMultiLightShader, numSegmentsInPattern * lightPerSeg,
 			boltPointLightPositionsPtr, attenuationOptions[attenuationChoice].y,
 								attenuationOptions[attenuationChoice].z, plColor);
 		// material
@@ -381,6 +383,7 @@ int main() {
 		// walls - using point lights
 		model = mat4(1.0f);
 		SetMVPMatricies(objectMultiLightShader, model, view, projection);
+		//double time1 = glfwGetTime();
 		RenderWall();
 		RenderFloor();
 		// render 2 more walls, to make a square room
@@ -389,6 +392,20 @@ int main() {
 			objectMultiLightShader.SetMat4("model", model);
 			RenderWall();
 		}
+		/*
+		double time2 = glfwGetTime();
+		totalTime += time2 - time1;
+		numPasses++;
+		// output average every 1000 passes
+		if (numPasses >= 5000) {
+			std::cout << "----------------------------" << std::endl;
+			std::cout << "Number of Lights: " << lightPerSeg * numSegmentsInPattern << std::endl;
+			std::cout << "ms: " << 1000.0 * (totalTime) / double(numPasses) << std::endl;
+			std::cout << "----------------------------" << std::endl << std::endl;
+			numPasses = 0;
+			totalTime = 0;
+		}
+		*/
 		// ---------------
 		
 		// Post Processing
@@ -397,7 +414,7 @@ int main() {
 		bool horizontal = true, first_iteration = true;
 		blurShader.Use();
 		
-		double time1 = glfwGetTime();
+		//double time1 = glfwGetTime();
 		for (int i = 0; i < amount+1; i++)
 		{
 			glBindFramebuffer(GL_FRAMEBUFFER, pingpongFBO[horizontal]);
@@ -412,6 +429,7 @@ int main() {
 				first_iteration = false;
 			}
 		}
+		/*
 		double time2 = glfwGetTime();
 		totalTime += time2 - time1;
 		numPasses++;
@@ -425,6 +443,7 @@ int main() {
 			totalTime = 0;
 			amount += 10;
 		}
+		*/
 		
 
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -487,10 +506,17 @@ void DefineTriangleBolt(TriangleBoltSegment* tboltPtr, std::shared_ptr<glm::vec3
 	}
 }
 
-void PositionBoltPointLights(vec3* lightPositionsPtr, std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr) {
-	for (int i = 0; i < 100; i++) {
-		*(lightPositionsPtr + i) = lightningPatternPtr[i];
-
+// Position a number of light between each bolt segments start and end points
+void PositionBoltPointLights(vec3* lightPositionsPtr, 
+	std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr) {
+	
+	unsigned int lighPosIndex = 0;
+	for (int seg = 0; seg < numSegmentsInPattern-1; seg++) {
+		vec3 segDir = (lightningPatternPtr[seg + 1] - lightningPatternPtr[seg]) / lightPerSeg;
+		for (int light = 0; light < lightPerSeg; light++) {
+			*(lightPositionsPtr + lighPosIndex) = lightningPatternPtr[seg] + segDir * (float)light;
+			lighPosIndex++;
+		}
 	}
 }
 
