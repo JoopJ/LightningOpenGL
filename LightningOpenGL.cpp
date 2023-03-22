@@ -49,8 +49,6 @@ using std::vector;
 using glm::radians;
 using glm::lookAt;
 
-// time for the lightning
-double strikeStartTime;
 // lightning start position
 const vec3 startPnt = vec3(400, 8000, 0);
 // post processing
@@ -60,17 +58,8 @@ bool bloom = true;
 // lighting options
 int attenuationChoice = 3;
 int atteunationRadius;
+float boltAlpha = 1.0f;
 vec3 boltColor = vec3(1.0f, 1.0f, 0.0f);
-// Strike Simulation
-bool strike = false;
-bool hideBolts = false;
-double waitDuration = 2;
-double flashDuration = 0.3;
-double flashFadeDuration = 2;
-double darknessDuration = 1.3;
-// Strike Part, manages the different parts of the strike
-enum StrikePart { Wait, Flash, Fade, Darkness };
-StrikePart strikePart = Wait;
 
 // Debuging
 bool lightBoxesEnable = false;
@@ -242,7 +231,7 @@ int main() {
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, tcbo[i], 0);
+		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + i, GL_TEXTURE_2D, tcbo[i], 0);
 	}
 
 	// depth and stencil buffer object
@@ -282,21 +271,6 @@ int main() {
 	}
 	// ----------------
 
-	// Strike Simulation
-	// -----------------
-
-	// bolt properties
-	// attenuation
-	float linear;
-	float quadratic;
-	float alpha = 1.0f;
-	double timer = 0;
-	double range;
-	double fluxTime = 0.1;
-	double fluxTimer = fluxTime;
-	double flux = 1;
-	int newBoltProb = 4;
-	float count = 0;
 	// -----------------
 
 	// render loop
@@ -306,86 +280,6 @@ int main() {
 		float currentFrame = static_cast<float>(glfwGetTime());
 		SetDeltaTime(currentFrame - GetLastFrame());
 		SetLastFrame(currentFrame);
-
-		// Strike Simulation Logic
-		if (strike) {
-			double diff;
-			range = 1;
-			timer += GetDeltaTime();
-			fluxTimer += GetDeltaTime();
-			if (fluxTimer > fluxTime) {
-				NewBolt(lboltPtr, tboltPtr, boltPointLightPositionsPtr, lightningPatternPtr);
-				fluxTimer = 0;
-				flux = 1 - 2 * (rand() % 2);
-				if (flux < 0) {
-					hideBolts = true;
-					range -= 50;
-					exposure -= 3;
-				} else {
-					hideBolts = false;
-					range += 80;
-					exposure += 3;
-				}
-			}
-
-			switch (strikePart) {
-			case Wait:
-				if (timer > waitDuration) {
-					strikePart = Flash;
-					hideBolts = false;
-					timer = 0;
-					exposure = 3.1;
-					count = 0;
-					break;
-				}
-				hideBolts = true;
-				amount = 3;
-				exposure = 0.1;
-				range = 1;
-				break;
-			case Flash:
-				if (timer > flashDuration) {
-					strikePart = Fade;
-					timer = 0;
-					break;
-				}
-				diff = flashDuration - timer;
-				range = 32 + count * flux;
-				count += 0.2;
-				//amount = 1 + 5 * diff;
-				break;
-			case Fade:
-				if (timer > flashFadeDuration) {
-					strikePart = Darkness;
-					timer = 0;
-					exposure = 2;
-					range = 1;
-					break;
-				}
-				diff = flashFadeDuration - timer;
-				range -= 0.1;
-				exposure -= (rand() % 2) * 0.02;
-				break;
-			case Darkness:
-				if (timer > darknessDuration) {
-					strikePart = Wait;
-					timer = 0;
-					strike = false;
-					hideBolts = false;
-					break;
-				}
-				hideBolts = true;
-				range = 1;
-				amount = 1;
-				exposure -= 0.1;
-				break;
-			}
-			if ((strikePart == Flash || strikePart == Fade) && (rand() % 100 < newBoltProb)) {
-				NewBolt(lboltPtr, tboltPtr, boltPointLightPositionsPtr, lightningPatternPtr);
-			}
-			linear = 4.5 / range;
-			quadratic = 75 / (range*range);
-		}
 		// -----------------------
 
 		// input
@@ -410,22 +304,22 @@ int main() {
 
 		// Drawing
 		// Bolts
-		if (!hideBolts) {	// need to hide bolts when simulating a strike
-			boltShader.Use();
-			boltShader.SetVec3("color", boltColor);
-			switch (methods[methodChoice]) {
-			case Lines:
-				// Line Bolt
-				SetVPMatricies(boltShader, view, projection);
-				DrawLineBolt(lboltPtr);
-				break;
-			case TrianglesColor:
-				// Color Triangle Bolt
-				SetVPMatricies(boltShader, view, projection);
-				DrawTriangleBolt(tboltPtr);
-				break;
-			}
+		boltShader.Use();
+		boltShader.SetVec3("color", boltColor);
+		boltShader.SetFloat("alpha", boltAlpha);
+		switch (methods[methodChoice]) {
+		case Lines:
+			// Line Bolt
+			SetVPMatricies(boltShader, view, projection);
+			DrawLineBolt(lboltPtr);
+			break;
+		case TrianglesColor:
+			// Color Triangle Bolt
+			SetVPMatricies(boltShader, view, projection);
+			DrawTriangleBolt(tboltPtr);
+			break;
 		}
+
 		// ------------------		
 		// Objects
 		// ---------------
@@ -438,7 +332,7 @@ int main() {
 				// vec3 pos = (boltPointLightPositionsPtr)[i];
 				///std::cout << "pos: " << pos.x << "," << pos.y << "," << pos.z << std::endl;
 				//std::cout << "Light Pos: " << (boltPointLightPositionsPtr)[i].x << ", " << (boltPointLightPositionsPtr)[i].y << ", " << (boltPointLightPositionsPtr)[i].z << std::endl;
-				model = glm::scale(model, vec3(0.1f));
+				model = glm::scale(model, vec3(0.4f));
 				SetMVPMatricies(lightShader, model, view, projection);
 				RenderCube();
 			}
@@ -449,19 +343,16 @@ int main() {
 		// get attenuation options
 		// x = radius, y = linear, z = quadratic
 
-		if (!strike) {
-			vec3 attenuation = attenuationOptions[attenuationChoice];
-			atteunationRadius = attenuation.x;
-			linear = attenuation.y;
-			quadratic = attenuation.z;
-		}
+		atteunationRadius = attenuationOptions[attenuationChoice].x;
+
 		// camera
 		objectMultiLightShader.SetVec3("viewPos", GetCameraPos());
 
 		// set properties
 		// spot lights
 		SetShaderPointLightProperties(objectMultiLightShader, numSegmentsInPattern,
-			boltPointLightPositionsPtr, linear, quadratic, plColor);
+			boltPointLightPositionsPtr, attenuationOptions[attenuationChoice].y,
+								attenuationOptions[attenuationChoice].z, plColor);
 		// material
 		SetShaderMaterialProperties(objectMultiLightShader, wallColor, 32.0f);
 		// bind diffuse map
@@ -489,7 +380,7 @@ int main() {
 		{
 			glBindFramebuffer(GL_FRAMEBUFFER, pingpongFBO[horizontal]);
 			blurShader.SetInt("horizontal", horizontal);
-			// bind texutre of other framebuffer, or scene if first iteration
+			// bind texutre of other framebuffer, or the texture to blur if first iteration
 			glBindTexture(GL_TEXTURE_2D, first_iteration ? tcbo[1] : pingpongBuffer[!horizontal]);
 			// render quad
 			RenderQuad();
@@ -543,10 +434,6 @@ int main() {
 	//glfw: terminate, clearing all previously allocated GLFW resources.
 	glfwTerminate();
 	return 0;
-}
-
-void StartStrike() {
-	strike = true;
 }
 
 // Bolt segment Setup
@@ -686,16 +573,13 @@ void RenderImGui() {
 	if (ImGui::Button("Show Light Positions")) {
 		lightBoxesEnable = !lightBoxesEnable;
 	}
+	ImGui::SliderFloat("Bolt Alpha", &boltAlpha, 0, 1);
+
 	ImGui::End();
 
 	ImGui::Begin("Post Processing");
-	if (!strike) {
-		ImGui::SliderInt("Blur Amount", &amount, 0, 20);
-		ImGui::SliderFloat("Exposure", &exposure, 0.1, 100);
-	}
-	else {
-		ImGui::Text("Striking");
-	}
+	ImGui::SliderInt("Blur Amount", &amount, 0, 20);
+	ImGui::SliderFloat("Exposure", &exposure, 0.1, 100);
 
 	ImGui::End();
 
@@ -703,9 +587,7 @@ void RenderImGui() {
 	ImGui::Text("Attenuation");
 	ImGui::Text("Radius: %d", atteunationRadius);
 	ImGui::SliderInt("##", &attenuationChoice, 0, 11);
-	if (ImGui::Button("Strike")) {
-		StartStrike();
-	}
+
 	ImGui::End();
 
 	ImGui::Render();

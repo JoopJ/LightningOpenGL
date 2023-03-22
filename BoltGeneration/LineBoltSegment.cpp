@@ -5,9 +5,7 @@
 #include "LineBoltSegment.h"
 
 // use setup function so Lines made in array can be initialized
-LineBoltSegment::LineBoltSegment() {
-	color = vec3(1.0f, 1.0f, 0.0f);
-};
+LineBoltSegment::LineBoltSegment() { };
 
 // Line Constructor
 LineBoltSegment::LineBoltSegment(glm::vec3 start, glm::vec3 end) {
