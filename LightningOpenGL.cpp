@@ -42,6 +42,7 @@ ImGui is used for the GUI which allows editting of various variables used to gen
 #include "FunctionLibrary.h"
 #include "CameraControl.h"
 #include "Renderer.h"
+#include "Performance.h"
 
 using glm::vec3;
 using glm::mat4;
@@ -52,7 +53,7 @@ using glm::lookAt;
 // lightning start position
 const vec3 startPnt = vec3(400, 8000, 0);
 // post processing
-int amount = 1;
+int amount = 0;
 float exposure = 1.0f;
 bool bloom = true;
 // lighting options
@@ -272,6 +273,20 @@ int main() {
 	// ----------------
 
 	// -----------------
+	// Performance Constructors
+	// -----------------
+
+	Performance mainLoop("Main Loop", 10.0);
+	mainLoop.SetPerSecondOutput(false);
+	mainLoop.SetAverageOutput(false);
+	mainLoop.Start();
+
+	// specifi measure
+	double totalTime = 0;
+	double lastTime = 0;
+	int numPasses = 0;
+	double outputTime = 60;
+	// -----------------
 
 	// render loop
 	while (!glfwWindowShouldClose(window)) {
@@ -280,6 +295,11 @@ int main() {
 		float currentFrame = static_cast<float>(glfwGetTime());
 		SetDeltaTime(currentFrame - GetLastFrame());
 		SetLastFrame(currentFrame);
+		// -----------------------
+		
+		// Performance
+		// -----------------------
+		mainLoop.Update();
 		// -----------------------
 
 		// input
@@ -376,6 +396,8 @@ int main() {
 		// Blur
 		bool horizontal = true, first_iteration = true;
 		blurShader.Use();
+		
+		double time1 = glfwGetTime();
 		for (int i = 0; i < amount+1; i++)
 		{
 			glBindFramebuffer(GL_FRAMEBUFFER, pingpongFBO[horizontal]);
@@ -390,6 +412,21 @@ int main() {
 				first_iteration = false;
 			}
 		}
+		double time2 = glfwGetTime();
+		totalTime += time2 - time1;
+		numPasses++;
+		// output average every 1000 passes
+		if (numPasses >= 1000) {
+			std::cout << "----------------------------" << std::endl;
+			std::cout << "Number of Blur Passes: " << amount << std::endl;
+			std::cout << "ms: " << 1000.0 * (totalTime) / double(numPasses) << std::endl;
+			std::cout << "----------------------------" << std::endl << std::endl;
+			numPasses = 0;
+			totalTime = 0;
+			amount += 10;
+		}
+		
+
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
 		// ---------------
 
@@ -525,7 +562,7 @@ void ProcessLightningControlInput(GLFWwindow* window,
 
 	// recalculate lines	TODO: method choices should choose between lines and tbolts
 	if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS && !spaceHeld) {
-		std::cout << "New Strike" << std::endl;
+		// std::cout << "New Strike" << std::endl;
 		spaceHeld = true;
 		lightningPatternPtr = GenerateLightningPattern(glm::vec3(400, 8000, 0));
 		// bolt point light positions
@@ -578,7 +615,7 @@ void RenderImGui() {
 	ImGui::End();
 
 	ImGui::Begin("Post Processing");
-	ImGui::SliderInt("Blur Amount", &amount, 0, 20);
+	ImGui::SliderInt("Blur Amount", &amount, 0, 1000);
 	ImGui::SliderFloat("Exposure", &exposure, 0.1, 100);
 
 	ImGui::End();
@@ -607,6 +644,9 @@ GLFWwindow* CreateWindow() {
 		std::cout << "Failed to initialize GLAD" << std::endl;
 		return NULL;
 	}
+
+	// turn off Vsyinc
+	glfwSwapInterval(0);
 
 	return window;
 }
