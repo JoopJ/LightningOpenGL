@@ -51,7 +51,7 @@ using glm::radians;
 using glm::lookAt;
 
 // lightning start position
-const vec3 startPnt = vec3(400, 8000, 0);
+const vec3 startPnt = vec3(400, 30000, 0);
 // post processing
 int amount = 0;
 float exposure = 1.0f;
@@ -103,10 +103,7 @@ void RenderImGui();
 GLFWwindow* CreateWindow();
 void InitImGui(GLFWwindow* window);
 // renderers
-void RenderQuad();
-void RenderCube();
-void RenderFloor();
-void RenderWall();
+void RenderScene(const Shader& shader);
 
 int main() {
 	// Initial Configurations and Window Creation
@@ -162,12 +159,12 @@ int main() {
 	vector<pair<vec3, vec3>> lightningDynamicPattern = GenerateParticalSystemPattern(startPnt, seed);
 	vector<pair<vec3, vec3>>* lightningDynamicPatternPtr = &lightningDynamicPattern;
 	// initial setting of pattern
-	lightningPatternPtr = GenerateRandomPositionsLightningPattern(startPnt);
+	//lightningPatternPtr = GenerateRandomPositionsLightningPattern(startPnt);
 	//DefineBoltLines(lboltPtr, lightningPatternPtr);
 	//DefineTriangleBolt(tboltPtr, lightningPatternPtr);
 	DefineBoltLines(lboltPtr, lightningDynamicPatternPtr);
 	//PositionBoltPointLights(boltPointLightPositionsPtr, lightningDynamicPatternPtr);
-	PositionBoltPointLights(boltPointLightPositionsPtr, lightningPatternPtr);
+	PositionBoltPointLights(boltPointLightPositionsPtr, lightningDynamicPatternPtr);
 
 	// ---------------
 
@@ -403,14 +400,7 @@ int main() {
 		model = mat4(1.0f);
 		SetMVPMatricies(objectMultiLightShader, model, view, projection);
 		//double time1 = glfwGetTime();
-		RenderWall();
-		RenderFloor();
-		// render 2 more walls, to make a square room
-		for (int i = 0; i < 2; i++) {
-			model = glm::rotate(model, glm::radians(90.0f), vec3(0, 1, 0));
-			objectMultiLightShader.SetMat4("model", model);
-			RenderWall();
-		}
+		RenderScene(objectMultiLightShader);
 		/*
 		double time2 = glfwGetTime();
 		totalTime += time2 - time1;
@@ -511,6 +501,40 @@ int main() {
 	return 0;
 }
 
+// Renderers
+// ---------------
+// Render Scene
+void RenderScene(const Shader& shader) {
+
+	// floor
+	RenderFloor();
+
+	// walls
+	mat4 model = mat4(1.0f);
+	model = glm::translate(model, vec3(0, 30, 0));
+	shader.SetMat4("model", model);
+	RenderWall();
+	// render 2 more walls, to make a square room
+	for (int i = 0; i < 2; i++) {
+		model = glm::rotate(model, glm::radians(90.0f), vec3(0, 1, 0));
+		shader.SetMat4("model", model);
+		RenderWall();
+	}
+
+	// boxes
+	model = mat4(1.0f);
+	model = glm::translate(model, vec3(8, 10, 15));
+	model = glm::scale(model, vec3(10));
+	shader.SetMat4("model", model);
+	RenderCube();
+	model = mat4(1.0f);
+	model = glm::translate(model, vec3(-3, 20, -19));
+	model = glm::scale(model, vec3(20));
+	shader.SetMat4("model", model);
+	RenderCube();
+}
+// ---------------
+
 // Bolt segment Setup
 // -------------
 // Static bolts
@@ -525,9 +549,6 @@ void DefineTriangleBolt(TriangleBoltSegment* tboltPtr, std::shared_ptr<glm::vec3
 		tboltPtr[i].Setup(lightningPatternPtr[i], lightningPatternPtr[i + 1]);
 	}
 }
-
-// Dynamic bolts
-
 // Dynamic bolt
 void DefineBoltLines(LineBoltSegment* lboltPtr, vector<pair<vec3, vec3>>* lightningPatternPtr) {
 	for (int i = 0; i < lightningPatternPtr->size(); i++) {
@@ -568,10 +589,11 @@ void PositionBoltPointLights(vec3* lightPositionsPtr,
 		}
 	}
 }
+
 // Static bolt
 void NewBolt(LineBoltSegment* lboltPtr, TriangleBoltSegment* tboltPtr, vec3* lightPositionsPtr, 
 	std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr) {
-	lightningPatternPtr = GenerateRandomPositionsLightningPattern(glm::vec3(400, 8000, 0));
+	lightningPatternPtr = GenerateRandomPositionsLightningPattern(startPnt);
 	// bolt point light positions
 	PositionBoltPointLights(lightPositionsPtr, lightningPatternPtr);
 	// bolt pattern positions

@@ -104,8 +104,8 @@ void RenderCube() {
 
 void RenderFloor() {
 	if (floorVAO == 0) {
-		float width = 100.0f;
-		float height = -70.0f;
+		float width = 40.0f;
+		float height = 0.0f;
 		float floorVertices[48] = {
 			// positions          // normals           // texture coords
 			width, height, width,  0.0f, 1.0f, 0.0f,   25.0f, 0.0f,
@@ -141,7 +141,7 @@ void RenderFloor() {
 
 void RenderWall() {
 	if (wallVAO == 0) {
-		float width = 100.0f;
+		float width = 30.0f;
 		float height = width;
 		float offset = 30.0f;
 		float wallVertices[]{
