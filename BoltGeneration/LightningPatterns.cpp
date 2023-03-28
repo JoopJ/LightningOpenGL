@@ -4,12 +4,11 @@
 int xVariation = 450;
 int yVariation = 425;
 
-std::shared_ptr<glm::vec3[numSegmentsInPattern]> GenerateLightningPattern(glm::vec3 startPnt) {
+std::shared_ptr<glm::vec3[numSegmentsInPattern]> GenerateRandomPositionsLightningPattern(glm::vec3 startPnt) {
 	std::shared_ptr<glm::vec3[numSegmentsInPattern]> patternPtr = std::make_shared<glm::vec3[numSegmentsInPattern]>();
 
 	patternPtr.get()[0] = ConvertWorldToScreen(startPnt);
 	for (int i = 1; i < numSegmentsInPattern; i++) {
-		//std::cout << "[" << prevPnt.x << "," << prevPnt.y << "]" << std::endl;
 		startPnt = NextPoint(startPnt);
 		patternPtr.get()[i] = ConvertWorldToScreen(startPnt);
 	}
@@ -30,92 +29,75 @@ glm::vec3 NextPoint(glm::vec3 point) {
 	return point;
 }
 
-void GenerateParticalSystemPattern(vec3 seed) {
+// Returns a pair of perpendicular axis to the seed.
+// The seed acts as the y axis and the two returned axis
+// will act as the x and z axis.
+// Seed should be normalized
+pair<vec3, vec3> GetRotationAxis(vec3 seed) {
+	// get arbitrary axis along yz plane of the seed
+	vec3 arb = vec3(seed.x, -seed.z, seed.y);
 
-	mat4 forwardTransform, inverseTransform = GetTransformsFromSeed(seed);
+	// get 2 perpendicular vectors to the seed
+	vec3 perp1 = cross(seed, arb);
+	vec3 perp2 = cross(seed, perp1);
 
-	// generate points
-	// TODO
+	return { perp1, perp2 };
 }
 
-mat4 GetTransformsFromSeed(vec3 seed) {
-	const vec3 u = seed;
+vector<pair<vec3, vec3>> GenerateParticalSystemPattern(vec3 start, vec3 seed) {
+	// dynamic vector of segments
+	vector<pair<vec3, vec3>> pattern;
 
-	// translate to origin
-	mat4 t1 = glm::translate(mat4(1), -u);
-	mat4 t1i = glm::inverse(t1);
+	float length = 4; // TODO random length for each segment
+	seed = normalize(seed);
+	// get the axis to rotate around
+	pair<vec3, vec3> seedPerpAxis = GetRotationAxis(seed);
 
-	// rotate about the x axis to lie in the xz plane (y = 0)
-	float rxAngle = glm::dot(vec3(0, 0, u.z), vec3(0, u.y, u.z));
-	mat4 rx = glm::rotate(mat4(1), glm::radians(rxAngle), vec3(1, 0, 0));
-	mat4 rxi = glm::inverse(rx);
+	vec3 prevEnd = start;
+	vec3 newPoint = start + seed * length;
 
-	// rotate about the y axis to lie along the z axis (x = 0)
-	float ryAngle = glm::dot(vec3(0, 0, u.z), vec3(u.x, 0, u.z));
-	mat4 ry = glm::rotate(mat4(1), glm::radians(ryAngle), vec3(0, 1, 0));
-	mat4 ryi = glm::inverse(ry);
+	for (int i = 0; i < 100; i++) {
+		// add the new segment to the pattern
+		pattern.push_back({ ConvertWorldToScreen(prevEnd), ConvertWorldToScreen(newPoint) });
 
-	// apply matricies together
-	mat4 forwardTransform = t1 * rx * ry;
-	mat4 inverseTransform = ryi * rxi * t1i;
+		prevEnd = newPoint;
 
-	return forwardTransform, inverseTransform;
+		// get the transform for the next point
+		vec3 newPointMove = seed * length;
+		// roate with respect to the seed
+		newPointMove = RotatePointAboutSeed(newPointMove, seedPerpAxis);
+		newPoint = prevEnd + newPointMove;
+	}
+
+	return pattern;
 }
 
-vec3 ParticalSystemNextPoint(vec3 point, mat4 ft, mat4 it) {
-	// make rotation
-	// TODO normal distribution for angles
-	float rotation1 = glm::radians(13.4f);
-	float rotation2 = glm::radians(18.9f);
-	mat4 r = glm::rotate(mat4(1), rotation1, vec3(1, 0, 0));
-	r = glm::rotate(r, rotation2, vec3(0, 1, 0));
-
-	// add rotation to transform
-	mat4 transform = ft * r * it;
-
-	// apply to point
-	vec3 newPos = transform * glm::vec4(point, 1);
-	return newPos;
+quaternion ConvertRotationQuaternion(vec3 seed, float angle) {
+	// rotation quaternion
+	quaternion qr = quaternion(cos(angle / 2), seed.x * sin(angle / 2), seed.y * sin(angle / 2), seed.z * sin(angle / 2));
+	return qr;
 }
 
-// proof of concept
-/*
-	const vec3 u = seed;
+vec3 RotatePointAboutSeed(vec3 point, pair<vec3, vec3> seedPerpAxis) {
+	// get rotation values
+	float degree1 = (rand() % 32) - 16;
+	float degree2 = (rand() % 32) - 16;
+	float r1 = glm::radians(degree1);	// TODO normal distribution for angles
+	float r2 = glm::radians(degree2);
 
-	mat4 t1 = glm::translate(mat4(1), -u);
-	mat4 t1i = glm::inverse(t1);
-	std::cout << "Seed: ";
-	OutputVec3(u);
-	std::cout << "T1: " << std::endl;
-	OutputMat4(t1);
+	// set rotation quaternions
+	quaternion qr1 = ConvertRotationQuaternion(seedPerpAxis.first, r1);
+	quaternion qr2 = ConvertRotationQuaternion(seedPerpAxis.second, r2);
 
-	// rotate about the x axis to lie in the xz plane (y = 0)
-	float rxAngle = glm::dot(vec3(0, 0, u.z), vec3(0, u.y, u.z));
-	mat4 rx = glm::rotate(mat4(1), glm::radians(rxAngle), vec3(1, 0, 0));
-	mat4 rxi = glm::inverse(rx);
-	std::cout << "RX: " << std::endl;
-	OutputMat4(rx);
+	// convert point to quaternion
+	quaternion p = quaternion(point.x, point.y, point.z, 0);
 
-	// rotate about the y axis to lie along the z axis (x = 0)
-	float ryAngle = glm::dot(vec3(0, 0, u.z), vec3(u.x, 0, u.z));
-	mat4 ry = glm::rotate(mat4(1), glm::radians(ryAngle), vec3(0, 1, 0));
-	mat4 ryi = glm::inverse(ry);
-	std::cout << "RY: " << std::endl;
-	OutputMat4(ry);
+	// apply rotation
+	quaternion q1 = qr1 * p * qr1.makeInverse();
+	quaternion q2 = qr2 * p * qr2.makeInverse();
+	quaternion final = q2*q1 * p * q1.makeInverse() * q2.makeInverse();
 
-	// rotate by 16 degrees about the x and y axis for desired output
-	mat4 r = glm::rotate(mat4(1), glm::radians(16.0f), vec3(1, 0, 0));
-	r = glm::rotate(r, glm::radians(16.0f), vec3(0, 1, 0));
-
-	// apply matricies together
-	mat4 forwardTransform = t1 * rx * ry;
-	mat4 inverseTransform = ryi * rxi * t1i;
-	mat4 transform = forwardTransform * r * inverseTransform;
-
-	vec3 newPos = transform * glm::vec4(u, 1);
-	std::cout << "Forward Transform:" << std::endl;
-	OutputMat4(forwardTransform);
-	std::cout << "Inverse Transform:" << std::endl;
-	OutputMat4(inverseTransform);
-	std::cout << "New Position:" << std::endl;
-	OutputVec3(newPos);*/
+	// extract new point
+	vec3 newPoint = vec3(final.X, final.Y, final.Z);
+	return newPoint;
+}

@@ -7,6 +7,7 @@ An exploration of the methods used to create realistic looking and behaving ligh
 - glm-0.9.9.8
 - imgui-1.89.3
 - stb_image-2.28
+- irrlicht-1.8.5
 
 ## How to use
 
@@ -29,6 +30,10 @@ Triangle Color - uses coloured triangle primitives
 
 ### TODO:
 
-- Bloom
+- Shadows
+
+- L-System
+
+- Branching
 
 - Deferred Rendering for large number of lights from bolt

@@ -14,7 +14,6 @@ LineBoltSegment::LineBoltSegment(glm::vec3 start, glm::vec3 end) {
 
 
 void LineBoltSegment::Setup(vec3 start, vec3 end) {
-
 	float verticesSet[6] = {
 		start.x, start.y, start.z,
 		end.x, end.y, end.z,
