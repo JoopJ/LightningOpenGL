@@ -13,11 +13,15 @@ An exploration of the methods used to create realistic looking and behaving ligh
 
 Space - Recalculates the lightning pattern.
 
-W/A/S/D - Move camera
+W/A/S/D - Move Camera
 
-Mouse - Rotate camera angle
+Mouse - Rotate Camera angle
 
-M - Toggle mouse camera movement
+M - Toggle Mouse camera movement
+
+B - Toggle Lightning Bolt Glow
+
+V - Toggle Shadows
 
 Esc - Exit
 
@@ -30,10 +34,22 @@ Triangle Color - uses coloured triangle primitives
 
 ### TODO:
 
-- Shadows
+- Shadow Mapping:
+	- Multiple Lights:
+		- Store information needed for object shader together: Depth Cube map, Position. (limited space)
+		- Pass other information to Object Shader (diffuse, attenuation, etc...)
+		- Replace current Point Lights
 
+- De-clutter Main:
+	- Move GUI code to separate file
+		- Might have issues passing values
+	- Move Buffer and Texture Object generation to separate file
+	- Update and move Bolt definition and rendering to separate file
+	
 - L-System
 
 - Branching
+
+- Blur Optimization
 
 - Deferred Rendering for large number of lights from bolt

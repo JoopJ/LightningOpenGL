@@ -33,5 +33,5 @@ void SetShaderMaterialProperties(Shader shader, vec3 color, float shininess) {
 	shader.SetVec3("material.ambient", ambient);
 	shader.SetVec3("material.diffuse", diffuse);
 	shader.SetVec3("material.specular", specular);
-	shader.SetFloat("material.shininess",  shininess);
+	shader.SetFloat("material.shininess", shininess);
 }

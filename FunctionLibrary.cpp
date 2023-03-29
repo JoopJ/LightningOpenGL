@@ -8,6 +8,11 @@ unsigned int SCR_HEIGHT;
 
 unsigned int boltTexture;
 
+std::string projectBase = "";
+std::string vertexDir = ProjectBasePath() + "\\Shader\\VertexShaders";
+std::string fragmentDir = ProjectBasePath() + "\\Shader\\FragmentShaders";
+std::string geometryDir = ProjectBasePath() + "\\Shader\\GeometryShaders";
+
 void LoadTextures() {
 	// load textures
 	std::string filename = "wall.png";
@@ -18,15 +23,27 @@ void LoadTextures() {
 	else std::cout << "Successfully loaded: " << filename << std::endl;
 }
 
-// Get the project base path
-std::string ProjectBasePath() {
-	//  "..\ProjectBase\x64\Debug" - sometimes path of exe
-	// remove "\x64\Debug" from current path if exe is in debug folder
-	std::string projectBase = std::filesystem::current_path().string();
-	if (projectBase.substr(projectBase.length() - 10) == "\\x64\\Debug") {
-		projectBase.erase(projectBase.end() - 10, projectBase.end());
+Shader LoadShader(const char* vertex, const char* fragment, const char* geometry) {
+	std::string vertexPath = vertexDir + "\\" + vertex;
+	std::string fragmentPath = fragmentDir + "\\" + fragment;
+	if (geometry != nullptr) {
+		std::string geometryPath = geometryDir + "\\" + geometry;
+		return Shader(vertexPath.c_str(), fragmentPath.c_str(), geometryPath.c_str());
 	}
+	else {
+		return Shader(vertexPath.c_str(), fragmentPath.c_str());
+	}
+}
 
+// Returns the path to the project base folder
+std::string ProjectBasePath() {
+	if (projectBase == "") {
+		projectBase = std::filesystem::current_path().string();
+		// if current path is in the debug folder, erase down to the project base
+		if (projectBase.substr(projectBase.length() - 10) == "\\x64\\Debug") {
+			projectBase.erase(projectBase.end() - 10, projectBase.end());
+		}
+	}
 	return projectBase;
 }
 

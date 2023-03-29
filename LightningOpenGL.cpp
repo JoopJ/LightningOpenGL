@@ -55,14 +55,17 @@ const vec3 startPnt = vec3(400, 30000, 0);
 // post processing
 int amount = 0;
 float exposure = 1.0f;
-bool bloom = true;
 // lighting options
 int attenuationChoice = 3;
 int atteunationRadius;
 float boltAlpha = 1.0f;
 vec3 boltColor = vec3(1.0f, 1.0f, 0.0f);
 float lightPerSeg = 1;	// the number of light boxes, including the start, that are placed per segment
-
+// toggles
+bool shadows = true;
+bool shadowKeyPressed = false;
+bool bloom = true;
+bool bloomKeyPressed = false;
 // Debuging
 bool lightBoxesEnable = false;
 
@@ -116,7 +119,10 @@ int main() {
 		return -1;
 	}
 	InitImGui(window);
-
+	// Global OpenGL state
+	glEnable(GL_DEPTH_TEST);
+	glEnable(GL_CULL_FACE);
+	// -------------------------
 	// Load Textures
 	// ---------------
 	unsigned int metalWallTexture = LoadTexture("\\Textures\\metal_wall.png");
@@ -158,56 +164,43 @@ int main() {
 	vec3 seed = vec3(6, -1000, -4);
 	vector<pair<vec3, vec3>> lightningDynamicPattern = GenerateParticalSystemPattern(startPnt, seed);
 	vector<pair<vec3, vec3>>* lightningDynamicPatternPtr = &lightningDynamicPattern;
-	// initial setting of pattern
+
+	// Set Initial Pattern:
 	//lightningPatternPtr = GenerateRandomPositionsLightningPattern(startPnt);
 	//DefineBoltLines(lboltPtr, lightningPatternPtr);
 	//DefineTriangleBolt(tboltPtr, lightningPatternPtr);
 	DefineBoltLines(lboltPtr, lightningDynamicPatternPtr);
 	//PositionBoltPointLights(boltPointLightPositionsPtr, lightningDynamicPatternPtr);
 	PositionBoltPointLights(boltPointLightPositionsPtr, lightningDynamicPatternPtr);
-
 	// ---------------
 
 	// Shaders
 	// ---------------
-	std::string projectBase = ProjectBasePath();
-	//std::cout << "Project Base Path: " << projectBase << std::endl;
+	// Bolt
+	Shader boltShader = LoadShader("bolt.vs", "bolt.fs");
+	// Post Processing
+	Shader screenShader = LoadShader("screen.vs", "screen.fs");
+	Shader blurShader = LoadShader("blur.vs", "blur.fs");
+	// Lighting
+	Shader lightShader = LoadShader("light.vs", "light.fs");
+	Shader depthShader = LoadShader("depth.vs", "depth.fs", "depth.gs");
+	// Object
+	Shader objectShader = LoadShader("object.vs", "object.fs");
 
-	std::string boltVertexPath = projectBase + "\\Shader\\VertexShaders\\bolt.vs";
-	std::string boltFragmentPath = projectBase + "\\Shader\\FragmentShaders\\bolt.fs";
-
-	std::string screenVertexPath = projectBase + "\\Shader\\VertexShaders\\screen.vs";
-	std::string screenFragmentPath = projectBase + "\\Shader\\FragmentShaders\\screen.fs";
-
-	std::string blurVertexPath = projectBase + "\\Shader\\VertexShaders\\blur.vs";
-	std::string blurFragmentPath = projectBase + "\\Shader\\FragmentShaders\\blur.fs";
-
-	std::string lightVartexPath = projectBase + "\\Shader\\VertexShaders\\light.vs";
-	std::string lightFragmentPath = projectBase + "\\Shader\\FragmentShaders\\light.fs";
-
-	std::string objectVertexPath = projectBase + "\\Shader\\VertexShaders\\object.vs";
-	std::string objectFragmentPath = projectBase + "\\Shader\\FragmentShaders\\object.fs";
-
-	std::string objectMultipleLightsFragmentPath = projectBase + "\\Shader\\FragmentShaders\\multiple_lights_object.fs";
-
-	// bolts
-	Shader boltShader(boltVertexPath.c_str(), boltFragmentPath.c_str());
-	// post processing
-	Shader screenShader(screenVertexPath.c_str(), screenFragmentPath.c_str());
-	Shader blurShader(blurVertexPath.c_str(), blurFragmentPath.c_str());
-	// lighting
-	Shader lightShader(lightVartexPath.c_str(), lightFragmentPath.c_str());
-	Shader objectMultiLightShader(objectVertexPath.c_str(), objectMultipleLightsFragmentPath.c_str());
-	
-	objectMultiLightShader.Use();
-	objectMultiLightShader.SetInt("material.diffuse", 0);
+	// Shader Configs
+	// set the location of texture uniforms for shaders
 	screenShader.Use();
 	screenShader.SetInt("screenTexture", 0);
 	screenShader.SetInt("bloomBlur", 1);
+
+	objectShader.Use();
+	objectShader.SetInt("diffuseTexture", 0);
+	objectShader.SetInt("depthMap", 1);
 	// ---------------
 
 	// Lighting
 	// -------------------------
+	// Specific options for light attenuation
 	vec3 attenuationOptions[12] = {
 		vec3(7, 0.7, 1.8),
 		vec3(13, 0.35, 0.44),
@@ -224,13 +217,37 @@ int main() {
 	};
 	// ------------------------
 
-	// Properties
-	// ---------------
-	// Point Light
-	vec3 plColor = vec3(1, 1, 1);	// point light color (lightning light color)
-	// Wall
-	vec3 wallColor = vec3(0.3, 0.3, 0.3);	// material color
-	// Postprocessing
+	// Shadows Objects
+	// ------------------------
+	const unsigned int SHADOW_WIDTH = 1024, SHADOW_HEIGHT = 1024;
+	// depth map FBO
+	unsigned int depthMapFBO;
+	glGenFramebuffers(1, &depthMapFBO);
+	// depth cubematp texture
+	unsigned int depthCubemap;
+	glGenTextures(1, &depthCubemap);
+	// asign each of the cubemap faces a 2D depth-valued texture image (shadow map)
+	glBindTexture(GL_TEXTURE_CUBE_MAP, depthCubemap);
+	for (unsigned int i = 0; i < 6; i++) {
+		glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_DEPTH_COMPONENT,
+			SHADOW_WIDTH, SHADOW_HEIGHT, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
+	}
+	// set texture parameters
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+	// attach depth texture as FBO's depth buffer
+	glBindFramebuffer(GL_FRAMEBUFFER, depthMapFBO);
+	glFramebufferTexture(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, depthCubemap, 0);
+	// tell OpenGL we don't want to render any color data
+	glDrawBuffer(GL_NONE);
+	glReadBuffer(GL_NONE);
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	// ------------------------
+
+	// Rendering Objects
 	// ---------------
 	// framebuffer object
 	unsigned int fbo;
@@ -286,25 +303,21 @@ int main() {
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, pingpongBuffer[i], 0);
 	}
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	// ----------------
 
-	// -----------------
 	// Performance Constructors
 	// -----------------
-
 	Performance mainLoop("Main Loop", 10.0);
 	mainLoop.SetPerSecondOutput(false);
 	mainLoop.SetAverageOutput(false);
 	mainLoop.Start();
-
-	// specifi measure
-	double totalTime = 0;
-	double lastTime = 0;
-	int numPasses = 0;
-	double outputTime = 60;
 	// -----------------
 
 	// Testing ---------
+	// Rotate the Point light
+	mat4 lightRotateMat4 = glm::rotate(mat4(1.0), glm::radians(0.01f), vec3(0, 1, 0));
+	vec3 lightPos = vec3(0.0f, 7.0f, 4.0f);
 	// -----------------
 
 	// render loop
@@ -326,23 +339,64 @@ int main() {
 		ProcessKeyboardInput(window);
 		ProcessMiscInput(window, &firstMouseKeyPress);	// TODO: move GUI stuff into separate file
 		ProcessLightningControlInput(window, lboltPtr, tboltPtr, boltPointLightPositionsPtr, lightningDynamicPatternPtr);
+		// -----------------------
 
-		// Render Lightning
+		// Rendering
+		// -----------------------
+		lightPos = vec3(lightRotateMat4 * glm::vec4(lightPos, 1.0));
+		float aspect = (float)SHADOW_WIDTH / (float)SHADOW_HEIGHT;
+		// 0. create depth cubemap transformation matrices
 		// -----------
-		// 
+		float near_plane = 0.1f, far_plane = 25.0f;
+		mat4 shadowProj = glm::perspective(radians(90.0f), aspect, near_plane, far_plane);
+		// create a transform matrix for each side of the cubemap
+		vector<mat4> shadowTransforms;
+		shadowTransforms.push_back(shadowProj * glm::lookAt(lightPos, 
+			lightPos + glm::vec3(1.0f, 0.0f, 0.0f), glm::vec3(0.0f, -1.0f, 0.0f))); // right
+		shadowTransforms.push_back(shadowProj * glm::lookAt(lightPos, 
+			lightPos + glm::vec3(-1.0f, 0.0f, 0.0f), glm::vec3(0.0f, -1.0f, 0.0f)));// left
+		shadowTransforms.push_back(shadowProj * glm::lookAt(lightPos, 
+			lightPos + glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f))); // top
+		shadowTransforms.push_back(shadowProj * glm::lookAt(lightPos, 
+			lightPos + glm::vec3(0.0f, -1.0f, 0.0f), glm::vec3(0.0f, 0.0f, -1.0f))); // bottom
+		shadowTransforms.push_back(shadowProj * glm::lookAt(lightPos, 
+			lightPos + glm::vec3(0.0f, 0.0f, 1.0f), glm::vec3(0.0f, -1.0f, 0.0f))); // near
+		shadowTransforms.push_back(shadowProj * glm::lookAt(lightPos, 
+			lightPos + glm::vec3(0.0f, 0.0f, -1.0f), glm::vec3(0.0f, -1.0f, 0.0f))); // far
+		
+		
+		// 1. render scene from light's point of view to depth cubemap
+		// ---------------------
+		glViewport(0, 0, SHADOW_WIDTH, SHADOW_HEIGHT);
+		glBindFramebuffer(GL_FRAMEBUFFER, depthMapFBO);
+		glClear(GL_DEPTH_BUFFER_BIT);
+		depthShader.Use();
+		for (unsigned int i = 0; i < 6; i++) {
+			depthShader.SetMat4("shadowMatrices[" + std::to_string(i) + "]", shadowTransforms[i]);
+		}
+		depthShader.SetFloat("far_plane", far_plane);
+		depthShader.SetVec3("lightPos", lightPos);
+		// depth shader dosen't need view or projection
+		RenderScene(depthShader);
+
+		// 2. render scene as normal to frame buffer object
+		// -------------------------
+		// First Pass, to framebuffer object (fbo)
+		glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+		glViewport(0, 0, SCR_WIDTH, SCR_HEIGHT);
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+		glClearColor(0.0, 0.0, 0.0, 1.0);
+		glEnable(GL_DEPTH_TEST);
+
 		// MVP
 		mat4 model;
+		// TODO Move to camera class
 		mat4 view = lookAt(GetCameraPos(), GetCameraPos() + GetCameraFront(), GetCameraUp());
 		mat4 projection = glm::perspective(glm::radians(GetFOV()), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.0f);
 
-		// first pass, to framebuffer object (fbo)
-		glBindFramebuffer(GL_FRAMEBUFFER, fbo);
-		glClearColor(0.0, 0.0, 0.0, 1.0);
-		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-		glEnable(GL_DEPTH_TEST);
 
-		// Drawing
-		// Bolts
+		// Render Lightning Bolt
+		// -----------------
 		boltShader.Use();
 		boltShader.SetVec3("color", boltColor);
 		boltShader.SetFloat("alpha", boltAlpha);
@@ -358,12 +412,11 @@ int main() {
 			DrawTriangleBolt(tboltPtr);
 			break;
 		}
-
-		// ------------------		
+		// ------------------	
+	
 		// Objects
-		// ---------------
-		// point lights positioned along the bolt
-
+		// ------------------
+		// Point Lights positioned along the bolt:
 		if (lightBoxesEnable) {
 			lightShader.Use();
 			SetVPMatricies(lightShader, view, projection);
@@ -375,46 +428,29 @@ int main() {
 				RenderCube();
 			}
 		}
-
-		// point lights and walls
-		objectMultiLightShader.Use();
-		// get attenuation options
-		// x = radius, y = linear, z = quadratic
-
-		atteunationRadius = attenuationOptions[attenuationChoice].x;
-
-		// camera
-		objectMultiLightShader.SetVec3("viewPos", GetCameraPos());
-
-		// set properties
-		// spot lights
-		SetShaderPointLightProperties(objectMultiLightShader, numSegmentsInPattern * lightPerSeg,
-			boltPointLightPositionsPtr, attenuationOptions[attenuationChoice].y,
-								attenuationOptions[attenuationChoice].z, plColor);
-		// material
-		SetShaderMaterialProperties(objectMultiLightShader, wallColor, 32.0f);
-		// bind diffuse map
-		glActiveTexture(GL_TEXTURE0);
-		glBindTexture(GL_TEXTURE_2D, metalWallTexture);
-		// walls - using point lights
+		// Shadow Point Light TODO: make dynamic and position along bolt
+		lightShader.Use();
 		model = mat4(1.0f);
-		SetMVPMatricies(objectMultiLightShader, model, view, projection);
-		//double time1 = glfwGetTime();
-		RenderScene(objectMultiLightShader);
-		/*
-		double time2 = glfwGetTime();
-		totalTime += time2 - time1;
-		numPasses++;
-		// output average every 1000 passes
-		if (numPasses >= 5000) {
-			std::cout << "----------------------------" << std::endl;
-			std::cout << "Number of Lights: " << lightPerSeg * numSegmentsInPattern << std::endl;
-			std::cout << "ms: " << 1000.0 * (totalTime) / double(numPasses) << std::endl;
-			std::cout << "----------------------------" << std::endl << std::endl;
-			numPasses = 0;
-			totalTime = 0;
-		}
-		*/
+		model = glm::translate(model, lightPos);
+		model = glm::scale(model, vec3(0.3f));
+		SetMVPMatricies(lightShader, model, view, projection);
+		RenderCube();
+
+		// Light Affected Objects:
+		objectShader.Use();
+		objectShader.SetVec3("viewPos", GetCameraPos());
+		objectShader.SetVec3("lightPos", lightPos);
+		objectShader.SetFloat("far_plane", far_plane);
+		objectShader.SetBool("shadows", shadows);
+
+		model = mat4(1.0f);
+		SetMVPMatricies(objectShader, model, view, projection);
+		// bind diffuse texture and depth cube map
+		glActiveTexture(GL_TEXTURE0);	// diffuse texture
+		glBindTexture(GL_TEXTURE_2D, metalWallTexture);
+		glActiveTexture(GL_TEXTURE1);	// depth cubemap
+		glBindTexture(GL_TEXTURE_CUBE_MAP, depthCubemap);
+		RenderScene(objectShader);
 		// ---------------
 		
 		// Post Processing
@@ -422,13 +458,13 @@ int main() {
 		// Blur
 		bool horizontal = true, first_iteration = true;
 		blurShader.Use();
-		
-		//double time1 = glfwGetTime();
+		// blur the texture
 		for (int i = 0; i < amount+1; i++)
 		{
 			glBindFramebuffer(GL_FRAMEBUFFER, pingpongFBO[horizontal]);
 			blurShader.SetInt("horizontal", horizontal);
 			// bind texutre of other framebuffer, or the texture to blur if first iteration
+			glActiveTexture(GL_TEXTURE0);
 			glBindTexture(GL_TEXTURE_2D, first_iteration ? tcbo[1] : pingpongBuffer[!horizontal]);
 			// render quad
 			RenderQuad();
@@ -438,31 +474,12 @@ int main() {
 				first_iteration = false;
 			}
 		}
-		/*
-		double time2 = glfwGetTime();
-		totalTime += time2 - time1;
-		numPasses++;
-		// output average every 1000 passes
-		if (numPasses >= 1000) {
-			std::cout << "----------------------------" << std::endl;
-			std::cout << "Number of Blur Passes: " << amount << std::endl;
-			std::cout << "ms: " << 1000.0 * (totalTime) / double(numPasses) << std::endl;
-			std::cout << "----------------------------" << std::endl << std::endl;
-			numPasses = 0;
-			totalTime = 0;
-			amount += 10;
-		}
-		*/
-		
-
-		glBindFramebuffer(GL_FRAMEBUFFER, 0);
 		// ---------------
-
-		// second pass, to default framebuffer
+		
+		// Second Pass, to default framebuffer
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
-		glClearColor(0.0, 0.5, 1.0, 1.0);
-		glClear(GL_COLOR_BUFFER_BIT);
-		glDisable(GL_DEPTH_TEST);
+		glViewport(0, 0, SCR_WIDTH, SCR_HEIGHT);
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 		screenShader.Use();
 		glActiveTexture(GL_TEXTURE0);
@@ -470,14 +487,14 @@ int main() {
 		glActiveTexture(GL_TEXTURE1);
 		glBindTexture(GL_TEXTURE_2D, pingpongBuffer[!horizontal]);
 		screenShader.SetBool("bloom", bloom);
-		screenShader.SetFloat("exposure", exposure);
+		//screenShader.SetFloat("exposure", exposure);
 		RenderQuad();
-
 		// ---------------
-		// 
+
 		// Render GUI
 		// ---------------
 		RenderImGui();
+		// ---------------
 
 		// glfw: swap buffers and poll IO events
 		glfwSwapBuffers(window);
@@ -504,32 +521,51 @@ int main() {
 // Renderers
 // ---------------
 // Render Scene
+// Only Sets the model matrix, other matrices should already be set
 void RenderScene(const Shader& shader) {
-
-	// floor
-	RenderFloor();
-
-	// walls
 	mat4 model = mat4(1.0f);
-	model = glm::translate(model, vec3(0, 30, 0));
+	/*
+	// Walls
+	mat4 model = mat4(1.0f);
+	model = glm::translate(model, vec3(0, 0, 10));
 	shader.SetMat4("model", model);
-	RenderWall();
-	// render 2 more walls, to make a square room
-	for (int i = 0; i < 2; i++) {
+	for (int i = 0; i < 4; i++) {
 		model = glm::rotate(model, glm::radians(90.0f), vec3(0, 1, 0));
 		shader.SetMat4("model", model);
 		RenderWall();
 	}
+	model = glm::rotate(model, glm::radians(90.0f), vec3(0, 0, 1));
+	shader.SetMat4("model", model);
+	RenderWall();
+	model = glm::rotate(model, glm::radians(180.0f), vec3(0, 0, 1));
+	shader.SetMat4("model", model);
+	RenderWall();
 
-	// boxes
+	// floor
 	model = mat4(1.0f);
-	model = glm::translate(model, vec3(8, 10, 15));
-	model = glm::scale(model, vec3(10));
+	RenderFloor();
+	*/
+	// Cubes
+	// room cube
+	model = mat4(1.0f);
+	model = glm::translate(model, vec3(0, 5, 0));
+	model = glm::scale(model, glm::vec3(10.0f));
+	shader.SetMat4("model", model);
+	glDisable(GL_CULL_FACE);
+	shader.SetInt("reverse_normals", 1);
+	RenderCube();
+	shader.SetInt("reverse_normals", 0);
+	glEnable(GL_CULL_FACE);
+
+	// other cubes
+	model = mat4(1.0f);
+	model = glm::translate(model, vec3(0, 4, 1));
+	model = glm::scale(model, vec3(0.5f));
 	shader.SetMat4("model", model);
 	RenderCube();
 	model = mat4(1.0f);
-	model = glm::translate(model, vec3(-3, 20, -19));
-	model = glm::scale(model, vec3(20));
+	model = glm::translate(model, vec3(2, 3, 0));
+	//model = glm::scale(model, vec3(1));
 	shader.SetMat4("model", model);
 	RenderCube();
 }
@@ -667,6 +703,26 @@ void ProcessMiscInput(GLFWwindow* window, bool* firstButtonPress) {
 		*firstButtonPress = true;
 
 	}
+
+	if (glfwGetKey(window, GLFW_KEY_B) == GLFW_PRESS && !bloomKeyPressed)
+	{
+		bloom = !bloom;
+		bloomKeyPressed = true;
+	}
+	if (glfwGetKey(window, GLFW_KEY_B) == GLFW_RELEASE)
+	{
+		bloomKeyPressed = false;
+	}
+
+	if (glfwGetKey(window, GLFW_KEY_V) == GLFW_PRESS && !shadowKeyPressed)
+	{
+		shadows = !shadows;
+		shadowKeyPressed = true;
+	}
+	if (glfwGetKey(window, GLFW_KEY_V) == GLFW_RELEASE)
+	{
+		shadowKeyPressed = false;
+	}
 }
 
 bool spaceHeld = false;
@@ -734,7 +790,7 @@ void RenderImGui() {
 	ImGui::End();
 
 	ImGui::Begin("Post Processing");
-	ImGui::SliderInt("Blur Amount", &amount, 0, 1000);
+	ImGui::SliderInt("Blur Amount", &amount, 0, 15);
 	ImGui::SliderFloat("Exposure", &exposure, 0.1, 100);
 
 	ImGui::End();
