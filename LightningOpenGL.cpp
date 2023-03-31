@@ -37,6 +37,7 @@ ImGui is used for the GUI which allows editting of various variables used to gen
 #include "BoltGeneration/TextureBolt.h"
 #include "BoltGeneration/TriangleBoltSegment.h"
 #include "BoltGeneration/LightningPatterns.h"
+#include "BoltGeneration/BoltSetup.h"
 #include "Shader/Shader.h"
 #include "Shader/ShaderSetup.h"
 #include "FunctionLibrary.h"
@@ -60,46 +61,29 @@ int attenuationChoice = 3;
 int atteunationRadius;
 float boltAlpha = 1.0f;
 vec3 boltColor = vec3(1.0f, 1.0f, 0.0f);
-float lightPerSeg = 1;	// the number of light boxes, including the start, that are placed per segment
 // toggles
 bool shadows = true;
 bool shadowKeyPressed = false;
 bool bloom = true;
 bool bloomKeyPressed = false;
+// Array Type
+bool DYNAMIC_BOLT = true;
+// Method Choice
+int methodChoice = 0; // 0 = random, 1 = particle system
+const char* methodNames[2] = { "Random Positions", "Particle System" };
 // Debuging
 bool lightBoxesEnable = false;
-
-enum Method { Lines, TrianglesColor };
-Method methods[2] = { Lines, TrianglesColor };
-const char* methodNames[2] = { "Line", "TriangleColor" };
-int methodChoice = 0;
 
 // function prototypes
 // MVP Setters
 void SetMVPMatricies(Shader shader, mat4 model, mat4 view, mat4 porjection);
 void SetVPMatricies(Shader shader, mat4 view, mat4 projection);
-// Define Bolt
-void DefineBoltLines(LineBoltSegment* lboltPtr, std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr);
-void DefineTriangleBolt(TriangleBoltSegment* tboltPtr, std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr);
-void DefineBoltLines(LineBoltSegment* lboltPtr, vector<pair<vec3, vec3>>* lightningPatternPtr);
-void DefineTriangleBolt(TriangleBoltSegment* tboltPtr, vector<pair<vec3, vec3>>* lightningPatternPtr);
-void PositionBoltPointLights(vec3* lightPositionsPtr, 
-	std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr);
-void PositionBoltPointLights(vec3* lightPositionsPtr,
-	vector<pair<vec3, vec3>>* lightningPatternPtr);
-void NewBolt(LineBoltSegment* lboltPtr, TriangleBoltSegment* tboltPtr, vec3* lightPositionsPtr,
-	std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr);
-void NewBolt(LineBoltSegment* lboltPtr, TriangleBoltSegment* tboltPtr, vec3* lightPositionsPtr,
-	vector<pair<vec3, vec3>>* lightningPatternPtr);
 // Drawing
-void DrawTriangleBolt(TriangleBoltSegment* tboltPtr);
 void DrawLineBolt(LineBoltSegment* lboltPtr);
+void DrawLineBolt(vector<LineBoltSegment>* lboltPtr);
 // Input
 void ProcessMiscInput(GLFWwindow* window, bool* firstButtonPress);
-void ProcessLightningControlInput(GLFWwindow* window,
-	LineBoltSegment* lboltPtr, TriangleBoltSegment* tboltPtr, vec3* bplpPtr, std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr);
-void ProcessLightningControlInput(GLFWwindow* window,
-	LineBoltSegment* lboltPtr, TriangleBoltSegment* tboltPtr, vec3* bplpPtr, vector<pair<vec3, vec3>>* lightningPatternPtr);
+bool ProcessLightningControlInput(GLFWwindow* window);
 // Config
 void ConfigureWindow();
 void RenderImGui();
@@ -139,39 +123,64 @@ int main() {
 	bool firstMouseKeyPress = true;
 	// ---------------
 
-	// Bolt Objects
+	// Bolt Objects Setup
 	// ---------------
-	// Lines	- Colored line primatives
-	LineBoltSegment boltLines[numSegmentsInPattern+1];
-	LineBoltSegment* lboltPtr = &boltLines[0];
-	// Triangles - Colored triangle primatives
-	TriangleBoltSegment* tboltPtr;
-	TriangleBoltSegment tsegments[numSegmentsInPattern+1];
-	tboltPtr = &tsegments[0];
-	// segmetns are initiall setup as static, TODO allow them to be changed to dynamic
+	// Line Segments
+	// static
+	LineBoltSegment boltLinesStatic[numSegmentsInPattern+1];
+	LineBoltSegment* staticLineSegmentsPtr = &boltLinesStatic[0];
+	// dynamic
+	vector<LineBoltSegment> boltLinesDynamic;
+	vector<LineBoltSegment>* dynamicLineSegmentsPtr = &boltLinesDynamic;
 
-	// Point Lights - Point lights at each point in the lightning pattern
-	const int maxNumPointLights = 3000;
-	vec3 boltPointLightPositions[maxNumPointLights];
-	vec3* boltPointLightPositionsPtr;
-	boltPointLightPositionsPtr = &boltPointLightPositions[0];
-	// ---------------
+	// Point Lights
+	const int maxNumPointLights = 100;
+	// static
+	vec3 pointLightPositionsStatic[maxNumPointLights];
+	vec3* staticPointLightPositionsPtr;
+	staticPointLightPositionsPtr = &pointLightPositionsStatic[0];
+	// dynamic
+	vector<vec3> pointLightPositionsDynamic;
+	vector<vec3>* dynamicPointLightPositionsPtr;
+	dynamicPointLightPositionsPtr = &pointLightPositionsDynamic;
 
-	// Lightning Pattern
-	// ---------------
-	// 2D array of points
-	std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr;
-	vec3 seed = vec3(6, -1000, -4);
-	vector<pair<vec3, vec3>> lightningDynamicPattern = GenerateParticalSystemPattern(startPnt, seed);
+	// Pattern
+	// static
+	std::shared_ptr<vec3[numSegmentsInPattern]> lightningStaticPatternPtr;
+	lightningStaticPatternPtr = std::make_shared<vec3[numSegmentsInPattern]>();
+	// dynamic
+	vector<pair<vec3, vec3>> lightningDynamicPattern;
 	vector<pair<vec3, vec3>>* lightningDynamicPatternPtr = &lightningDynamicPattern;
+	// ---------------
 
-	// Set Initial Pattern:
-	//lightningPatternPtr = GenerateRandomPositionsLightningPattern(startPnt);
-	//DefineBoltLines(lboltPtr, lightningPatternPtr);
-	//DefineTriangleBolt(tboltPtr, lightningPatternPtr);
-	DefineBoltLines(lboltPtr, lightningDynamicPatternPtr);
-	//PositionBoltPointLights(boltPointLightPositionsPtr, lightningDynamicPatternPtr);
-	PositionBoltPointLights(boltPointLightPositionsPtr, lightningDynamicPatternPtr);
+	// Bolt Objects Definition
+	// ---------------
+	// Set Method Properties:
+
+	// Generation Method 0: Random Positions
+	// None
+
+	// Generation Method 1: Particle System
+	vec3 seed = vec3(6, -1000, -4);
+	SetParticleSystemSeedSegment(seed);
+
+	// Generation Method 2: L-System
+	// None
+
+	// Set the pattern generation method
+	SetMethod(methodChoice);
+
+	// Generate the pattern and set the line segment positions and point light positions
+	if (DYNAMIC_BOLT) {
+		// Dynamic Bolt
+		NewBolt(dynamicLineSegmentsPtr, dynamicPointLightPositionsPtr,
+			startPnt, lightningDynamicPatternPtr);
+	}
+	else {
+		// Static Bolt
+		NewBolt(staticLineSegmentsPtr, staticPointLightPositionsPtr,
+			startPnt, lightningStaticPatternPtr);
+	}
 	// ---------------
 
 	// Shaders
@@ -196,7 +205,7 @@ int main() {
 	objectShader.Use();
 	objectShader.SetInt("diffuseTexture", 0);
 	objectShader.SetInt("depthMap", 1);
-	// ---------------
+	// -------------------------
 
 	// Lighting
 	// -------------------------
@@ -248,7 +257,7 @@ int main() {
 	// ------------------------
 
 	// Rendering Objects
-	// ---------------
+	// ------------------------
 	// framebuffer object
 	unsigned int fbo;
 	glGenFramebuffers(1, &fbo);
@@ -317,7 +326,7 @@ int main() {
 	// Testing ---------
 	// Rotate the Point light
 	mat4 lightRotateMat4 = glm::rotate(mat4(1.0), glm::radians(0.01f), vec3(0, 1, 0));
-	vec3 lightPos = vec3(0.0f, 7.0f, 4.0f);
+	vec3 lightPos = vec3(0.0f, 45.0f, 20.0f);
 	// -----------------
 
 	// render loop
@@ -338,7 +347,19 @@ int main() {
 		// -----------------------
 		ProcessKeyboardInput(window);
 		ProcessMiscInput(window, &firstMouseKeyPress);	// TODO: move GUI stuff into separate file
-		ProcessLightningControlInput(window, lboltPtr, tboltPtr, boltPointLightPositionsPtr, lightningDynamicPatternPtr);
+		if (ProcessLightningControlInput(window)) {
+			// New Bolt
+			if (DYNAMIC_BOLT) {
+				// Dynamic Bolt
+				NewBolt(dynamicLineSegmentsPtr, dynamicPointLightPositionsPtr,
+					startPnt, lightningDynamicPatternPtr);
+			} 
+			else {
+				// Static Bolt
+				NewBolt(staticLineSegmentsPtr, staticPointLightPositionsPtr,
+					startPnt, lightningStaticPatternPtr);
+			}
+		}
 		// -----------------------
 
 		// Rendering
@@ -400,18 +421,12 @@ int main() {
 		boltShader.Use();
 		boltShader.SetVec3("color", boltColor);
 		boltShader.SetFloat("alpha", boltAlpha);
-		switch (methods[methodChoice]) {
-		case Lines:
-			// Line Bolt
-			SetVPMatricies(boltShader, view, projection);
-			DrawLineBolt(lboltPtr);
-			break;
-		case TrianglesColor:
-			// Color Triangle Bolt
-			SetVPMatricies(boltShader, view, projection);
-			DrawTriangleBolt(tboltPtr);
-			break;
-		}
+		SetVPMatricies(boltShader, view, projection);
+		if (DYNAMIC_BOLT)
+			DrawLineBolt(dynamicLineSegmentsPtr);
+		else
+			DrawLineBolt(staticLineSegmentsPtr);
+
 		// ------------------	
 	
 		// Objects
@@ -420,13 +435,24 @@ int main() {
 		if (lightBoxesEnable) {
 			lightShader.Use();
 			SetVPMatricies(lightShader, view, projection);
-			for (int i = 0; i < lightPerSeg * numSegmentsInPattern; i++) {
-				model = mat4(1.0f);
-				model = glm::translate(model, boltPointLightPositions[i]);
-				model = glm::scale(model, vec3(0.3f));
-				lightShader.SetMat4("model", model);
-				RenderCube();
+			if (DYNAMIC_BOLT) {
+				for (int i = 0; i < GetLightPerSegment() * dynamicLineSegmentsPtr->size(); i++) {
+					model = mat4(1.0f);
+					model = glm::translate(model, dynamicPointLightPositionsPtr->at(i));
+					model = glm::scale(model, vec3(0.3f));
+					lightShader.SetMat4("model", model);
+					RenderCube();
+				}
+			} else {
+				for (int i = 0; i < GetLightPerSegment() * numSegmentsInPattern; i++) {
+					model = mat4(1.0f);
+					model = glm::translate(model, staticPointLightPositionsPtr[i]);
+					model = glm::scale(model, vec3(0.3f));
+					lightShader.SetMat4("model", model);
+					RenderCube();
+				}
 			}
+			
 		}
 		// Shadow Point Light TODO: make dynamic and position along bolt
 		lightShader.Use();
@@ -524,32 +550,11 @@ int main() {
 // Only Sets the model matrix, other matrices should already be set
 void RenderScene(const Shader& shader) {
 	mat4 model = mat4(1.0f);
-	/*
-	// Walls
-	mat4 model = mat4(1.0f);
-	model = glm::translate(model, vec3(0, 0, 10));
-	shader.SetMat4("model", model);
-	for (int i = 0; i < 4; i++) {
-		model = glm::rotate(model, glm::radians(90.0f), vec3(0, 1, 0));
-		shader.SetMat4("model", model);
-		RenderWall();
-	}
-	model = glm::rotate(model, glm::radians(90.0f), vec3(0, 0, 1));
-	shader.SetMat4("model", model);
-	RenderWall();
-	model = glm::rotate(model, glm::radians(180.0f), vec3(0, 0, 1));
-	shader.SetMat4("model", model);
-	RenderWall();
-
-	// floor
-	model = mat4(1.0f);
-	RenderFloor();
-	*/
 	// Cubes
 	// room cube
 	model = mat4(1.0f);
 	model = glm::translate(model, vec3(0, 5, 0));
-	model = glm::scale(model, glm::vec3(10.0f));
+	model = glm::scale(model, glm::vec3(50.0f));
 	shader.SetMat4("model", model);
 	glDisable(GL_CULL_FACE);
 	shader.SetInt("reverse_normals", 1);
@@ -559,119 +564,30 @@ void RenderScene(const Shader& shader) {
 
 	// other cubes
 	model = mat4(1.0f);
-	model = glm::translate(model, vec3(0, 4, 1));
-	model = glm::scale(model, vec3(0.5f));
+	model = glm::translate(model, vec3(0, 20, 5));
+	model = glm::scale(model, vec3(2.5f));
 	shader.SetMat4("model", model);
 	RenderCube();
 	model = mat4(1.0f);
-	model = glm::translate(model, vec3(2, 3, 0));
-	//model = glm::scale(model, vec3(1));
+	model = glm::translate(model, vec3(10, 15, 0));
+	model = glm::scale(model, vec3(5));
 	shader.SetMat4("model", model);
 	RenderCube();
 }
 // ---------------
 
-// Bolt segment Setup
-// -------------
-// Static bolts
-void DefineBoltLines(LineBoltSegment* lboltPtr, std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr) {
-	for (int i = 0; i < numSegmentsInPattern - 1; i++) {
-		lboltPtr[i].Setup(lightningPatternPtr[i], lightningPatternPtr[i + 1]);
-	}
-}
-
-void DefineTriangleBolt(TriangleBoltSegment* tboltPtr, std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr) {
-	for (int i = 0; i < numSegmentsInPattern - 1; i++) {
-		tboltPtr[i].Setup(lightningPatternPtr[i], lightningPatternPtr[i + 1]);
-	}
-}
-// Dynamic bolt
-void DefineBoltLines(LineBoltSegment* lboltPtr, vector<pair<vec3, vec3>>* lightningPatternPtr) {
-	for (int i = 0; i < lightningPatternPtr->size(); i++) {
-		lboltPtr[i].Setup(lightningPatternPtr->at(i).first, lightningPatternPtr->at(i).second);
-	}
-}
-
-void DefineTriangleBolt(TriangleBoltSegment* tboltPtr, vector<pair<vec3, vec3>>* lightningPatternPtr) {
-	for (int i = 0; i < lightningPatternPtr->size(); i++) {
-		tboltPtr[i].Setup(lightningPatternPtr->at(i).first, lightningPatternPtr->at(i).second);
-	}
-}
-
-// Position a number of light between each bolt segments start and end points
-void PositionBoltPointLights(vec3* lightPositionsPtr, 
-	std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr) {
-	
-	unsigned int lighPosIndex = 0;
-	for (int seg = 0; seg < numSegmentsInPattern-1; seg++) {
-		vec3 segDir = (lightningPatternPtr[seg + 1] - lightningPatternPtr[seg]) / lightPerSeg;
-		for (int light = 0; light < lightPerSeg; light++) {
-			*(lightPositionsPtr + lighPosIndex) = lightningPatternPtr[seg] + segDir * (float)light;
-			lighPosIndex++;
-		}
-	}
-}
-
-// Using a dynamic number of segments:
-// Position a number of light between each bolt segments start and end points
-void PositionBoltPointLights(vec3* lightPositionsPtr,
-	vector<pair<vec3, vec3>>* lightningPatternPtr) {
-	unsigned int lightPosIndex = 0;
-	for (int seg = 0; seg < lightningPatternPtr->size(); seg++) {
-		vec3 segDir = (lightningPatternPtr->at(seg).second - lightningPatternPtr->at(seg).first) / lightPerSeg;
-		for (int light = 0; light < lightPerSeg; light++) {
-			*(lightPositionsPtr + lightPosIndex) = lightningPatternPtr->at(seg).first + segDir * (float)light;
-			lightPosIndex++;
-		}
-	}
-}
-
-// Static bolt
-void NewBolt(LineBoltSegment* lboltPtr, TriangleBoltSegment* tboltPtr, vec3* lightPositionsPtr, 
-	std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr) {
-	lightningPatternPtr = GenerateRandomPositionsLightningPattern(startPnt);
-	// bolt point light positions
-	PositionBoltPointLights(lightPositionsPtr, lightningPatternPtr);
-	// bolt pattern positions
-	switch (methods[methodChoice]) {
-	case Lines:
-		DefineBoltLines(lboltPtr, lightningPatternPtr);
-		break;
-	case TrianglesColor:
-		DefineTriangleBolt(tboltPtr, lightningPatternPtr);
-		break;
-	}
-}
-// Dynamic bolt
-void NewBolt(LineBoltSegment* lboltPtr, TriangleBoltSegment* tboltPtr, vec3* lightPositionsPtr,
-	vector<pair<vec3, vec3>>* lightningPatternPtr) {
-	vector<pair<vec3, vec3>> lightningPattern = GenerateParticalSystemPattern(startPnt, vec3(6, -1000, -4));
-	lightningPatternPtr = &lightningPattern;
-	// bolt point light positions
-	PositionBoltPointLights(lightPositionsPtr, lightningPatternPtr);
-	// bolt pattern positions
-	switch (methods[methodChoice]) {
-	case Lines:
-		DefineBoltLines(lboltPtr, lightningPatternPtr);
-		break;
-	case TrianglesColor:
-		DefineTriangleBolt(tboltPtr, lightningPatternPtr);
-		break;
-	}
-}
-// ----------------
-
 // Bolt Draw
 // ---------------
-void DrawTriangleBolt(TriangleBoltSegment* tboltPtr) {
-	for (int i = 0; i < numSegmentsInPattern - 1; i++) {
-		tboltPtr[i].Draw();
-	}
-}
-
+// STATIC
 void DrawLineBolt(LineBoltSegment* lboltPtr) {
 	for (int i = 0; i < numSegmentsInPattern - 1; i++) {
 		lboltPtr[i].Draw();
+	}
+}
+// DYNAMIC
+void DrawLineBolt(vector<LineBoltSegment>* lboltPtr) {
+	for (int i = 0; i < lboltPtr->size(); i++) {
+		lboltPtr->at(i).Draw();
 	}
 }
 // ---------------
@@ -726,35 +642,19 @@ void ProcessMiscInput(GLFWwindow* window, bool* firstButtonPress) {
 }
 
 bool spaceHeld = false;
-// ProcessLightningControlInput, process inputs relating to control of the lightning
-void ProcessLightningControlInput(GLFWwindow* window,
-	LineBoltSegment* lboltPtr, TriangleBoltSegment* tboltPtr, vec3* bplpPtr, std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr) {
-
+// ProcessLightningControlInput, process inputs relating to control of the lightning.
+// returns true when a new strike is initiated, false otherwise.
+bool ProcessLightningControlInput(GLFWwindow* window) {
 	// recalculate lines	TODO: method choices should choose between lines and tbolts
 	if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS && !spaceHeld) {
 		// std::cout << "New Strike" << std::endl;
 		spaceHeld = true;
-		NewBolt(lboltPtr, tboltPtr, bplpPtr, lightningPatternPtr);
+		return true;
 	}
 	else if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_RELEASE) {
 		spaceHeld = false;
 	}
-}
-
-// Dynamic bolt
-// ProcessLightningControlInput, process inputs relating to control of the lightning
-void ProcessLightningControlInput(GLFWwindow* window,
-	LineBoltSegment* lboltPtr, TriangleBoltSegment* tboltPtr, vec3* bplpPtr, vector<pair<vec3, vec3>>* lightningPatternPtr) {
-
-	// recalculate lines	TODO: method choices should choose between lines and tbolts
-	if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS && !spaceHeld) {
-		// std::cout << "New Strike" << std::endl;
-		spaceHeld = true;
-		NewBolt(lboltPtr, tboltPtr, bplpPtr, lightningPatternPtr);
-	}
-	else if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_RELEASE) {
-		spaceHeld = false;
-	}
+	return false;
 }
 // -------------------
 
@@ -771,6 +671,7 @@ void ConfigureWindow() {
 }
 
 // GUI:
+std::string dynamicText = "Dynamic";
 void RenderImGui() {
 	ImGui_ImplOpenGL3_NewFrame();
 	ImGui_ImplGlfw_NewFrame();
@@ -781,7 +682,19 @@ void RenderImGui() {
 
 	// Bolt Control window
 	ImGui::Begin("Bolt Options");
-	ImGui::Combo("Methods", &methodChoice, methodNames, IM_ARRAYSIZE(methodNames));	// dosen't work
+	if (ImGui::Combo("Methods", &methodChoice, methodNames, 2)) {
+		SetMethod(methodChoice);
+	}
+
+	if (ImGui::Button(DYNAMIC_BOLT ? "Dynamic" : "Static")) {
+			DYNAMIC_BOLT = !DYNAMIC_BOLT;
+	}
+	if (DYNAMIC_BOLT) {
+		ImGui::Text("DYNAMIC INFO HERE");
+	} else {
+		ImGui::Text("STATIC INFO HERE");
+	}
+
 	if (ImGui::Button("Show Light Positions")) {
 		lightBoxesEnable = !lightBoxesEnable;
 	}

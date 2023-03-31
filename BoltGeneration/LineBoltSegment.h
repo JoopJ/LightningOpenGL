@@ -16,13 +16,12 @@ class LineBoltSegment {
 private:
 	unsigned int VBO, VAO;
 	float vertices[6];
-	glm::vec3 color;
 
 public:
 	LineBoltSegment(); // called when Line is created in array, Setup should be called afterwards
 	LineBoltSegment(glm::vec3 start, glm::vec3 end); // Line Constructor
 	void Setup(glm::vec3 start, glm::vec3 end);
-	int SetColor(glm::vec3 color);
 	void Draw();
-	~LineBoltSegment();
+	//~LineBoltSegment();
+	void printInfo();
 };

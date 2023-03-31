@@ -8,7 +8,7 @@
 LineBoltSegment::LineBoltSegment() { };
 
 // Line Constructor
-LineBoltSegment::LineBoltSegment(glm::vec3 start, glm::vec3 end) {
+LineBoltSegment::LineBoltSegment(vec3 start, vec3 end) {
 	Setup(start, end);
 }
 
@@ -19,6 +19,10 @@ void LineBoltSegment::Setup(vec3 start, vec3 end) {
 		end.x, end.y, end.z,
 	};
 	memcpy(vertices, verticesSet, sizeof(verticesSet));
+
+	// delete old buffers if they exist
+	glDeleteVertexArrays(1, &VAO);
+	glDeleteBuffers(1, &VBO);
 
 	// genereate, bind and initialize buffer's for bolt rendering
 	glGenVertexArrays(1, &VAO);
@@ -36,18 +40,23 @@ void LineBoltSegment::Setup(vec3 start, vec3 end) {
 	glBindVertexArray(0);
 }
 
-int LineBoltSegment::SetColor(vec3 colorSet) {
-	color = colorSet;
-	return 1;
-}
-
 void LineBoltSegment::Draw() {
 	glBindVertexArray(VAO);
 	glDrawArrays(GL_LINES, 0, 2);
 }
 
+// Don't want to delete buffers here because this is called
+// when dynamic array (vector) is expanded and the old array 
+// is deleted.
+// We delete old buffers in Setup function.
+/*
 LineBoltSegment::~LineBoltSegment() {
 	glDeleteVertexArrays(1, &VAO);
 	glDeleteBuffers(1, &VBO);
-	//glDeleteProgram(shaderProgram);
+} */
+
+void LineBoltSegment::printInfo() {
+	std::cout << "VAO: " << VAO << std::endl;
+	std::cout << "VBO: " << VBO << std::endl;
+	std::cout << "vertices: " << vertices << std::endl << std::endl;
 }
