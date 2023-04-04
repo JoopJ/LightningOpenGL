@@ -75,6 +75,9 @@ const char* methodNames[2] = { "Random Positions", "Particle System" };
 bool lightBoxesEnable = false;
 
 // function prototypes
+// UBO Data settings
+void SetLightPositionsUniformData(unsigned int uboLights, vec3 lightPos);
+
 // MVP Setters
 void SetMVPMatricies(Shader shader, mat4 model, mat4 view, mat4 porjection);
 void SetVPMatricies(Shader shader, mat4 view, mat4 projection);
@@ -171,22 +174,34 @@ int main() {
 	// Set the pattern generation method
 	SetMethod(methodChoice);
 
+
+	vector<vec3> lightPositions;
 	// Generate the pattern and set the line segment positions and point light positions
 	if (DYNAMIC_BOLT) {
 		// Dynamic Bolt
 		NewBolt(dynamicLineSegmentsPtr, dynamicPointLightPositionsPtr,
 			startPnt, lightningDynamicPatternPtr);
+
+		for (int i = 0; i < 100; i++) {
+			lightPositions.push_back(dynamicPointLightPositionsPtr->at(i));
+		}
 	}
 	else {
 		// Static Bolt
 		NewBolt(staticLineSegmentsPtr, staticPointLightPositionsPtr,
 			startPnt, lightningStaticPatternPtr);
+
+		for (int i = 0; i < 100; i++) {
+			lightPositions.push_back(staticPointLightPositionsPtr[i]);
+		}
 	}
+
 	// ---------------
-	/*
+
 	// Shaders
 	// ---------------
 	// Bolt
+	/*
 	Shader boltShader = LoadShader("bolt.vs", "bolt.fs");
 	// Post Processing
 	Shader screenShader = LoadShader("screen.vs", "screen.fs");
@@ -196,7 +211,18 @@ int main() {
 	Shader depthShader = LoadShader("depth.vs", "depth.fs", "depth.gs");
 	// Object
 	Shader objectShader = LoadShader("object.vs", "object_forward_rendering.fs");
+	*/
+	// Deferred Shading
+	Shader geometryPassShader = LoadShader("object_deferred.vs", "object_deferred.fs");
+	Shader lightingPassShader = LoadShader("lighting_pass.vs", "lighting_pass.fs");
+	Shader lightCubeShader = LoadShader("light.vs", "light.fs");
+	// lightingPassShader Info for the uniform block, which is used to pass the light 
+	// position data to the shader.
+	GLuint info;
+	glGetUniformiv(lightingPassShader.GetID(), GL_MAX_UNIFORM_BLOCK_SIZE, reinterpret_cast<GLint*>(&info));
+	std::cout << "LightingPassShader GL_MAX_UNIFORM_BLOCK_SIZE: " << info << std::endl;
 
+	/*
 	// Shader Configs
 	// set the location of texture uniforms for shaders
 	screenShader.Use();
@@ -205,7 +231,7 @@ int main() {
 
 	objectShader.Use();
 	objectShader.SetInt("diffuseTexture", 0);
-	objectShader.SetInt("depthMap", 1);
+	objectShader.SetInt("depthMap", 1); */
 	// -------------------------
 
 	// Lighting
@@ -226,7 +252,6 @@ int main() {
 		vec3(3250, 0.0014, 0.000007)
 	};
 	// ------------------------
-	*/
 	/*
 	// Shadows Objects
 	// ------------------------
@@ -315,33 +340,14 @@ int main() {
 		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, pingpongBuffer[i], 0);
 	}
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-	// ----------------
 	*/
-
-	// Performance Constructors
-	// -----------------
-	Performance mainLoop("Main Loop", 10.0);
-	mainLoop.SetPerSecondOutput(false);
-	mainLoop.SetAverageOutput(false);
-	mainLoop.Start();
-	// -----------------
-
-	// Testing ---------
-	// Rotate the Point light
-	mat4 lightRotateMat4 = glm::rotate(mat4(1.0), glm::radians(0.01f), vec3(0, 1, 0));
-	vec3 lightPos = vec3(0.0f, 10.0f, 18.0f);
-	// -----------------
-
+	// Deferred Rending Stuff
 	// G-BUFFER
 	// --------------------
 	glEnable(GL_DEPTH_TEST);
 
-	Shader geometryPassShader = LoadShader("object_deferred.vs", "object_deferred.fs");
-	Shader lightingPassShader = LoadShader("lighting_pass.vs", "lighting_pass.fs");
-	Shader lightCubeShader = LoadShader("light.vs", "light.fs");
 	// normal textre should use a high-precision texture, 16 or 32 bit, float per component.
 	// the albedo and specular values are fine with default 8 bit per component.
-
 	unsigned int gBuffer;
 	glGenFramebuffers(1, &gBuffer);
 	glBindFramebuffer(GL_FRAMEBUFFER, gBuffer);
@@ -386,11 +392,42 @@ int main() {
 		std::cout << "Framebuffer not complete!" << std::endl;
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
+	// Uniform buffer: Light Positions
+	int NR_LIGHTS = 1;
+	// calculate the block size, 1 vec3 (position) of size (vec3) * number of lights
+	unsigned int lightsBlockSize = 1 * sizeof(vec3) * NR_LIGHTS;
+	unsigned int uboLights;
+	glGenBuffers(1, &uboLights);
+	glBindBuffer(GL_UNIFORM_BUFFER, uboLights);
+	glBufferData(GL_UNIFORM_BUFFER, lightsBlockSize, NULL, GL_STATIC_DRAW);
+	glBindBuffer(GL_UNIFORM_BUFFER, 0);
+
+	// set shader uniform block to binding point
+	unsigned int lightsUniformBlockIndex = glGetUniformBlockIndex(lightingPassShader.GetID(), "LightPositions");
+	glUniformBlockBinding(lightingPassShader.GetID(), lightsUniformBlockIndex, 2);
+	// bind ubo to the same binding point
+	glBindBufferRange(GL_UNIFORM_BUFFER, 2, uboLights, 0, lightsBlockSize);
+	// --------------------
+
+	// Performance Constructors
+	// -----------------
+	Performance mainLoop("Main Loop", 10.0);
+	mainLoop.SetPerSecondOutput(false);
+	mainLoop.SetAverageOutput(false);
+	mainLoop.Start();
+	// -----------------
+
+	// Testing ---------
+	// Rotate the Point light
+	mat4 lightRotateMat4 = glm::rotate(mat4(1.0), glm::radians(0.01f), vec3(0, 1, 0));
+	vec3 lightPos = vec3(0.0f, 10.0f, 18.0f);
+	// -----------------
+
 	// Lighting info
 	// -------------
-	const unsigned int NR_LIGHTS = 32;
-	std::vector<glm::vec3> lightPositions;
-	std::vector<glm::vec3> lightColors;
+	/*
+	lightPositions.clear();
+	vector<vec3> lightColors;
 	srand(13);
 	for (unsigned int i = 0; i < NR_LIGHTS; i++)
 	{
@@ -398,13 +435,15 @@ int main() {
 		float xPos = static_cast<float>(((rand() % 100) / 100.0) * 6.0 - 3.0);
 		float yPos = static_cast<float>(((rand() % 100) / 100.0) * 6.0 - 4.0);
 		float zPos = static_cast<float>(((rand() % 100) / 100.0) * 6.0 - 3.0);
-		lightPositions.push_back(glm::vec3(xPos, yPos, zPos));
+		lightPositions.push_back(vec3(xPos, yPos, zPos));
 		// also calculate random color
 		float rColor = static_cast<float>(((rand() % 100) / 200.0f) + 0.5); // between 0.5 and 1.0
 		float gColor = static_cast<float>(((rand() % 100) / 200.0f) + 0.5); // between 0.5 and 1.0
 		float bColor = static_cast<float>(((rand() % 100) / 200.0f) + 0.5); // between 0.5 and 1.0
-		lightColors.push_back(glm::vec3(rColor, gColor, bColor));
-	}
+		lightColors.push_back(vec3(rColor, gColor, bColor));
+	} */
+	lightPos = vec3(0,0,3);
+	SetLightPositionsUniformData(uboLights, lightPos);
 
 	// shader config
 	// -------------
@@ -415,19 +454,16 @@ int main() {
 
 	// object info
 	vector<vec3> objectPositions;
-	objectPositions.push_back(glm::vec3(-3.0, -0.5, -3.0));
-	objectPositions.push_back(glm::vec3(0.0, -0.5, -3.0));
-	objectPositions.push_back(glm::vec3(3.0, -0.5, -3.0));
-	objectPositions.push_back(glm::vec3(-3.0, -0.5, 0.0));
-	objectPositions.push_back(glm::vec3(0.0, -0.5, 0.0));
-	objectPositions.push_back(glm::vec3(3.0, -0.5, 0.0));
-	objectPositions.push_back(glm::vec3(-3.0, -0.5, 3.0));
-	objectPositions.push_back(glm::vec3(0.0, -0.5, 3.0));
-	objectPositions.push_back(glm::vec3(3.0, -0.5, 3.0));
-
+	objectPositions.push_back(vec3(-3.0, -0.5, -3.0));
+	objectPositions.push_back(vec3(0.0, -0.5, -3.0));
+	objectPositions.push_back(vec3(3.0, -0.5, -3.0));
+	objectPositions.push_back(vec3(-3.0, -0.5, 0.0));
+	objectPositions.push_back(vec3(0.0, -0.5, 0.0));
+	objectPositions.push_back(vec3(3.0, -0.5, 0.0));
+	objectPositions.push_back(vec3(-3.0, -0.5, 3.0));
+	objectPositions.push_back(vec3(0.0, -0.5, 3.0));
+	objectPositions.push_back(vec3(3.0, -0.5, 3.0));
 	// --------------------
-
-
 
 	// render loop
 	while (!glfwWindowShouldClose(window)) {
@@ -467,6 +503,10 @@ int main() {
 		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+		// udpate light position through UBO
+		lightPos = vec3(lightRotateMat4 * glm::vec4(lightPos, 1.0));
+		SetLightPositionsUniformData(uboLights, lightPos);
+
 		// 1. Geometry Pass: render all geometric/color data to g-buffer
 		// ---------------
 		glBindFramebuffer(GL_FRAMEBUFFER, gBuffer);
@@ -485,7 +525,7 @@ int main() {
 		for (unsigned int i = 0; i < objectPositions.size(); i++) {
 			model = mat4(1.0f);
 			model = glm::translate(model, objectPositions[i]);
-			model = glm::scale(model, vec3(0.5f));
+			model = glm::scale(model, vec3(0.3f));
 			geometryPassShader.SetMat4("model", model);
 			RenderCube();
 		}
@@ -502,18 +542,14 @@ int main() {
 		glActiveTexture(GL_TEXTURE2);
 		glBindTexture(GL_TEXTURE_2D, gAlbedoSpec);
 		// also send light relevant uniforms
-		for (unsigned int i = 0; i < lightPositions.size(); i++) {
-			lightingPassShader.SetVec3("lights[" + std::to_string(i) + "].Position", lightPositions[i]);
-			lightingPassShader.SetVec3("lights[" + std::to_string(i) + "].Color", lightColors[i]);
-			// update attenuation parameters are calculate radius
-			const float linear = 0.7f;
-			const float quadratic = 1.8f;
-			lightingPassShader.SetFloat("lights[" + std::to_string(i) + "].Linear", linear);
-			lightingPassShader.SetFloat("lights[" + std::to_string(i) + "].Quadratic", quadratic);
-		}
+		const float linear = 0.7f;
+		const float quadratic = 1.8f;
+		lightingPassShader.SetFloat("Linear", linear);
+		lightingPassShader.SetFloat("Quadratic", quadratic);
+		lightingPassShader.SetVec3("Color", vec3(1.0f, 1.0f, 1.0f));
 		lightingPassShader.SetVec3("viewPos", GetCameraPos());
 		RenderQuad();
-#
+		
 		// 2.5 copy contents of geometry's depth buffer to default framebuffer's depth buffer
 		// -----------------
 		glBindFramebuffer(GL_READ_FRAMEBUFFER, gBuffer);
@@ -524,6 +560,7 @@ int main() {
 
 		// 3. render lights on top of scene
 		// -----------------
+		/*
 		lightCubeShader.Use();
 		SetVPMatricies(lightCubeShader, view, projection);
 		for (unsigned int i = 0; i < lightPositions.size(); i++) {
@@ -533,7 +570,7 @@ int main() {
 			lightCubeShader.SetMat4("model", model);
 			lightCubeShader.SetVec3("lightColor", lightColors[i]);
 			RenderCube();
-		}
+		} */
 
 		/*
 		// Rendering
@@ -751,6 +788,14 @@ void RenderScene(const Shader& shader) {
 	RenderCube();
 }
 // ---------------
+
+void SetLightPositionsUniformData(unsigned int uboLights, vec3 lightPos) {
+	// set data of Light Positions UBO
+	vec3* ptr = &lightPos;
+	glBindBuffer(GL_UNIFORM_BUFFER, uboLights);
+	glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(vec3), ptr);
+	glBindBuffer(GL_UNIFORM_BUFFER, 0);
+}
 
 // Bolt Draw
 // ---------------

@@ -8,17 +8,19 @@ uniform sampler2D gPosition;
 uniform sampler2D gNormal;
 uniform sampler2D gAlbedoSpec;
 
-struct Light {
-    vec3 Position;
-    vec3 Color;
-
-    float Linear;   // attenuation will likely remain constant for all light.
-    float Quadratic;// so could be stored outside Light structs
+const int NR_LIGHTS = 1;
+// layout (std140, binding = 2), uniform LightPositions { // explicitly specify binding point
+layout (std140) uniform LightPositions {
+    vec3 lightPositions;  
 };
-const int NR_LIGHTS = 32;
-uniform Light lights[NR_LIGHTS];
+
 uniform vec3 viewPos;
 
+// attenuation and color parameters are constatnt for all lights 
+// (waste of space to pass with each Light object)
+uniform float Linear;
+uniform float Quadratic;
+uniform vec3 Color;
 void main()
 {             
     // retrieve data from G-buffer
@@ -33,17 +35,17 @@ void main()
     for(int i = 0; i < NR_LIGHTS; ++i)
     {
         // diffuse
-        vec3 lightDir = normalize(lights[i].Position - FragPos);
-        vec3 diffuse = max(dot(Normal, lightDir), 0.0) * Albedo * lights[i].Color;
+        vec3 lightDir = normalize(lightPositions - FragPos);
+        vec3 diffuse = max(dot(Normal, lightDir), 0.0) * Albedo * Color;
         
         // specular
         vec3 halfwayDir = normalize(lightDir + viewDir);
         float spec = pow(max(dot(Normal, halfwayDir), 0.0), 16.0);
-        vec3 specular = Specular * spec * lights[i].Color;
+        vec3 specular = Specular * spec * Color;
 
         // attenuation
-        float distance = length(lights[i].Position - FragPos);
-        float attenuation = 1.0 / (1.0 + lights[i].Linear * distance + lights[i].Quadratic * distance * distance);
+        float distance = length(lightPositions - FragPos);
+        float attenuation = 1.0 / (1.0 + Linear * distance + Quadratic * distance * distance);
 
         diffuse *= attenuation;
         specular *= attenuation;
