@@ -326,7 +326,7 @@ int main() {
 	// Testing ---------
 	// Rotate the Point light
 	mat4 lightRotateMat4 = glm::rotate(mat4(1.0), glm::radians(0.01f), vec3(0, 1, 0));
-	vec3 lightPos = vec3(0.0f, 45.0f, 20.0f);
+	vec3 lightPos = vec3(0.0f, 10.0f, 18.0f);
 	// -----------------
 
 	// render loop
@@ -368,7 +368,7 @@ int main() {
 		float aspect = (float)SHADOW_WIDTH / (float)SHADOW_HEIGHT;
 		// 0. create depth cubemap transformation matrices
 		// -----------
-		float near_plane = 0.1f, far_plane = 25.0f;
+		float near_plane = 0.1f, far_plane = 200.0f;
 		mat4 shadowProj = glm::perspective(radians(90.0f), aspect, near_plane, far_plane);
 		// create a transform matrix for each side of the cubemap
 		vector<mat4> shadowTransforms;

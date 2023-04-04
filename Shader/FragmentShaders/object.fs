@@ -19,9 +19,19 @@ uniform vec3 viewPos;
 uniform float far_plane;
 uniform bool shadows; // enable/disable shadows
 
-float ShadowCalculation(vec3 fragPos) {
-    // TODO: PCF
+// use a fixed amount of samples, reducing the number of of samples
+// needed for visually similar results to a larger number of samples
+// taken closer together.
+// array of offset directions for sampling
+vec3 sampleOffsetDirections[20] = vec3[] (
+   vec3(1, 1,  1), vec3( 1, -1,  1), vec3(-1, -1,  1), vec3(-1, 1,  1), 
+   vec3(1, 1, -1), vec3( 1, -1, -1), vec3(-1, -1, -1), vec3(-1, 1, -1),
+   vec3(1, 1,  0), vec3( 1, -1,  0), vec3(-1, -1,  0), vec3(-1, 1,  0),
+   vec3(1, 0,  1), vec3(-1,  0,  1), vec3( 1,  0, -1), vec3(-1, 0, -1),
+   vec3(0, 1,  1), vec3( 0, -1,  1), vec3( 0, -1, -1), vec3( 0, 1, -1)
+);
 
+float ShadowCalculation(vec3 fragPos) {
     // get vector between light position and current fragment position
     vec3 lightToFrag = fragPos - lightPos;
     // sample from depth map
@@ -33,6 +43,36 @@ float ShadowCalculation(vec3 fragPos) {
     // check if current fragment is in shadow or not
     float bias = 0.05f;  // bias to avoid shadow acne
     float shadow = currentDepth - bias > closestDepth ? 1.0 : 0.0;
+
+    // display cubemap for debugging
+    //FragColor = vec4(vec3(closestDepth / far_plane), 1.0);
+
+    return shadow;
+}
+
+float ShadowCalculationPCF(vec3 fragPos) {
+    // get vector between light position and current fragment position
+    vec3 lightToFrag = fragPos - lightPos;
+    // current linear depth value
+    float currentDepth = length(lightToFrag);
+    // Percentage-closer filtering (PCF), filter multiple samples around the
+    // fragment position and average the results, reducing jagged shadow edges.
+    float shadow = 0.0;
+    float bias   = 0.15;
+    int samples  = 20;
+    float viewDistance = length(viewPos - fragPos);
+    // diskRadius scales the offsets to be proportional to the distance
+    // of the viewer from from the fragment, makeing shadows softer when
+    // far away and sharper when close.
+    float diskRadius = (1.0 + (viewDistance / far_plane)) / 25.0;
+    for(int i = 0; i < samples; ++i)
+    {
+        float closestDepth = texture(depthMap, lightToFrag + sampleOffsetDirections[i] * diskRadius).r;
+        closestDepth *= far_plane;   // undo mapping [0;1]
+        if(currentDepth - bias > closestDepth)
+            shadow += 1.0;
+    }
+    shadow /= float(samples); 
 
     // display cubemap for debugging
     //FragColor = vec4(vec3(closestDepth / far_plane), 1.0);
@@ -58,7 +98,7 @@ void main() {
     spec = pow(max(dot(normal, halfwayDir), 0.0), 64.0);
     vec3 specular = spec * lightColor;    
     // calculate shadow
-    float shadow = shadows ? ShadowCalculation(fs_in.FragPos) : 0.0;                      
+    float shadow = shadows ? ShadowCalculationPCF(fs_in.FragPos) : 0.0;                      
     vec3 result = (ambient + (1.0 - shadow) * (diffuse + specular)) * color;   
 
     BlurColor = vec4(0,0,0,1);

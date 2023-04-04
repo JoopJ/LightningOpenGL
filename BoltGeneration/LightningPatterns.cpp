@@ -26,7 +26,7 @@ vector<pair<vec3, vec3>>* GenerateRandomPositionsLightningPattern(vec3 start,
 	patternPtr->clear();
 	
 	vec3 end;
-	for (int i = 0; i < numSegmentsInPattern+50; i++) {
+	for (int i = 0; i < numSegmentsInPattern; i++) {
 		end = NextPoint(start);
 		patternPtr->push_back({ ConvertWorldToScreen(start), ConvertWorldToScreen(end) });
 		start = end;
@@ -81,7 +81,7 @@ vector<pair<vec3, vec3>>* GenerateParticleSystemPattern(vec3 start, vec3 seed,
 	vec3 prevEnd = start;
 	vec3 newPoint = start + seed * length;
 
-	for (int i = 0; i < numSegmentsInPattern+50; i++) {
+	for (int i = 0; i < numSegmentsInPattern; i++) {
 		// add the new segment to the pattern
 		patternPtr->push_back({ ConvertWorldToScreen(prevEnd), ConvertWorldToScreen(newPoint) });
 
