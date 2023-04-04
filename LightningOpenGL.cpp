@@ -93,6 +93,7 @@ void InitImGui(GLFWwindow* window);
 void RenderScene(const Shader& shader);
 
 int main() {
+	std::cout << "Testing Version" << std::endl << std::endl;
 	// Initial Configurations and Window Creation
 	// -------------------------
 	std::srand(std::time(NULL));
@@ -182,7 +183,7 @@ int main() {
 			startPnt, lightningStaticPatternPtr);
 	}
 	// ---------------
-
+	/*
 	// Shaders
 	// ---------------
 	// Bolt
@@ -194,7 +195,7 @@ int main() {
 	Shader lightShader = LoadShader("light.vs", "light.fs");
 	Shader depthShader = LoadShader("depth.vs", "depth.fs", "depth.gs");
 	// Object
-	Shader objectShader = LoadShader("object.vs", "object.fs");
+	Shader objectShader = LoadShader("object.vs", "object_forward_rendering.fs");
 
 	// Shader Configs
 	// set the location of texture uniforms for shaders
@@ -225,7 +226,8 @@ int main() {
 		vec3(3250, 0.0014, 0.000007)
 	};
 	// ------------------------
-
+	*/
+	/*
 	// Shadows Objects
 	// ------------------------
 	const unsigned int SHADOW_WIDTH = 1024, SHADOW_HEIGHT = 1024;
@@ -314,6 +316,7 @@ int main() {
 	}
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	// ----------------
+	*/
 
 	// Performance Constructors
 	// -----------------
@@ -328,6 +331,103 @@ int main() {
 	mat4 lightRotateMat4 = glm::rotate(mat4(1.0), glm::radians(0.01f), vec3(0, 1, 0));
 	vec3 lightPos = vec3(0.0f, 10.0f, 18.0f);
 	// -----------------
+
+	// G-BUFFER
+	// --------------------
+	glEnable(GL_DEPTH_TEST);
+
+	Shader geometryPassShader = LoadShader("object_deferred.vs", "object_deferred.fs");
+	Shader lightingPassShader = LoadShader("lighting_pass.vs", "lighting_pass.fs");
+	Shader lightCubeShader = LoadShader("light.vs", "light.fs");
+	// normal textre should use a high-precision texture, 16 or 32 bit, float per component.
+	// the albedo and specular values are fine with default 8 bit per component.
+
+	unsigned int gBuffer;
+	glGenFramebuffers(1, &gBuffer);
+	glBindFramebuffer(GL_FRAMEBUFFER, gBuffer);
+	unsigned int gPosition, gNormal, gAlbedoSpec;
+
+	// - position color buffer
+	glGenTextures(1, &gPosition);
+	glBindTexture(GL_TEXTURE_2D, gPosition);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, SCR_WIDTH, SCR_HEIGHT, 0, GL_RGBA, GL_FLOAT, NULL);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, gPosition, 0);
+
+	// - normal color buffer
+	glGenTextures(1, &gNormal);
+	glBindTexture(GL_TEXTURE_2D, gNormal);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, SCR_WIDTH, SCR_HEIGHT, 0, GL_RGBA, GL_FLOAT, NULL);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D, gNormal, 0);
+
+	// - color + specular color buffer
+	glGenTextures(1, &gAlbedoSpec);
+	glBindTexture(GL_TEXTURE_2D, gAlbedoSpec);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, SCR_WIDTH, SCR_HEIGHT, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT2, GL_TEXTURE_2D, gAlbedoSpec, 0);
+
+	// tell OpenGL which color attachments we'll use (of this framebuffer) for rendering 
+	unsigned int attachments[3] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2 };
+	glDrawBuffers(3, attachments);
+
+	// create and attach depth buffer (renderbuffer)
+	unsigned int rboDepth;
+	glGenRenderbuffers(1, &rboDepth);
+	glBindRenderbuffer(GL_RENDERBUFFER, rboDepth);
+	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, SCR_WIDTH, SCR_HEIGHT);
+	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, rboDepth);
+	// check if framebuffer is complete
+	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+		std::cout << "Framebuffer not complete!" << std::endl;
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+	// Lighting info
+	// -------------
+	const unsigned int NR_LIGHTS = 32;
+	std::vector<glm::vec3> lightPositions;
+	std::vector<glm::vec3> lightColors;
+	srand(13);
+	for (unsigned int i = 0; i < NR_LIGHTS; i++)
+	{
+		// calculate slightly random offsets
+		float xPos = static_cast<float>(((rand() % 100) / 100.0) * 6.0 - 3.0);
+		float yPos = static_cast<float>(((rand() % 100) / 100.0) * 6.0 - 4.0);
+		float zPos = static_cast<float>(((rand() % 100) / 100.0) * 6.0 - 3.0);
+		lightPositions.push_back(glm::vec3(xPos, yPos, zPos));
+		// also calculate random color
+		float rColor = static_cast<float>(((rand() % 100) / 200.0f) + 0.5); // between 0.5 and 1.0
+		float gColor = static_cast<float>(((rand() % 100) / 200.0f) + 0.5); // between 0.5 and 1.0
+		float bColor = static_cast<float>(((rand() % 100) / 200.0f) + 0.5); // between 0.5 and 1.0
+		lightColors.push_back(glm::vec3(rColor, gColor, bColor));
+	}
+
+	// shader config
+	// -------------
+	lightingPassShader.Use();
+	lightingPassShader.SetInt("gPosition", 0);
+	lightingPassShader.SetInt("gNormal", 1);
+	lightingPassShader.SetInt("gAlbedoSpec", 2);
+
+	// object info
+	vector<vec3> objectPositions;
+	objectPositions.push_back(glm::vec3(-3.0, -0.5, -3.0));
+	objectPositions.push_back(glm::vec3(0.0, -0.5, -3.0));
+	objectPositions.push_back(glm::vec3(3.0, -0.5, -3.0));
+	objectPositions.push_back(glm::vec3(-3.0, -0.5, 0.0));
+	objectPositions.push_back(glm::vec3(0.0, -0.5, 0.0));
+	objectPositions.push_back(glm::vec3(3.0, -0.5, 0.0));
+	objectPositions.push_back(glm::vec3(-3.0, -0.5, 3.0));
+	objectPositions.push_back(glm::vec3(0.0, -0.5, 3.0));
+	objectPositions.push_back(glm::vec3(3.0, -0.5, 3.0));
+
+	// --------------------
+
+
 
 	// render loop
 	while (!glfwWindowShouldClose(window)) {
@@ -362,6 +462,80 @@ int main() {
 		}
 		// -----------------------
 
+		// Deferred Rendering
+		// -----------------------
+		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+		// 1. Geometry Pass: render all geometric/color data to g-buffer
+		// ---------------
+		glBindFramebuffer(GL_FRAMEBUFFER, gBuffer);
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+		mat4 model = mat4(1.0f);
+		mat4 view = lookAt(GetCameraPos(), GetCameraPos() + GetCameraFront(), GetCameraUp());
+		mat4 projection = glm::perspective(glm::radians(GetFOV()), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.0f);
+
+		geometryPassShader.Use();
+		SetVPMatricies(geometryPassShader, view, projection);
+
+		// bind diffuse texture
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, metalWallTexture);
+		for (unsigned int i = 0; i < objectPositions.size(); i++) {
+			model = mat4(1.0f);
+			model = glm::translate(model, objectPositions[i]);
+			model = glm::scale(model, vec3(0.5f));
+			geometryPassShader.SetMat4("model", model);
+			RenderCube();
+		}
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+		// Lighting Pass
+		// ---------------
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+		lightingPassShader.Use();
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, gPosition);
+		glActiveTexture(GL_TEXTURE1);
+		glBindTexture(GL_TEXTURE_2D, gNormal);
+		glActiveTexture(GL_TEXTURE2);
+		glBindTexture(GL_TEXTURE_2D, gAlbedoSpec);
+		// also send light relevant uniforms
+		for (unsigned int i = 0; i < lightPositions.size(); i++) {
+			lightingPassShader.SetVec3("lights[" + std::to_string(i) + "].Position", lightPositions[i]);
+			lightingPassShader.SetVec3("lights[" + std::to_string(i) + "].Color", lightColors[i]);
+			// update attenuation parameters are calculate radius
+			const float linear = 0.7f;
+			const float quadratic = 1.8f;
+			lightingPassShader.SetFloat("lights[" + std::to_string(i) + "].Linear", linear);
+			lightingPassShader.SetFloat("lights[" + std::to_string(i) + "].Quadratic", quadratic);
+		}
+		lightingPassShader.SetVec3("viewPos", GetCameraPos());
+		RenderQuad();
+#
+		// 2.5 copy contents of geometry's depth buffer to default framebuffer's depth buffer
+		// -----------------
+		glBindFramebuffer(GL_READ_FRAMEBUFFER, gBuffer);
+		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0); // write to default framebuffer
+		// blit to default framebuffer.
+		glBlitFramebuffer(0, 0, SCR_WIDTH, SCR_HEIGHT, 0, 0, SCR_WIDTH, SCR_HEIGHT, GL_DEPTH_BUFFER_BIT, GL_NEAREST);
+		glBindBuffer(GL_FRAMEBUFFER, 0);
+
+		// 3. render lights on top of scene
+		// -----------------
+		lightCubeShader.Use();
+		SetVPMatricies(lightCubeShader, view, projection);
+		for (unsigned int i = 0; i < lightPositions.size(); i++) {
+			model = mat4(1.0f);
+			model = glm::translate(model, lightPositions[i]);
+			model = glm::scale(model, glm::vec3(0.125f));
+			lightCubeShader.SetMat4("model", model);
+			lightCubeShader.SetVec3("lightColor", lightColors[i]);
+			RenderCube();
+		}
+
+		/*
 		// Rendering
 		// -----------------------
 		lightPos = vec3(lightRotateMat4 * glm::vec4(lightPos, 1.0));
@@ -516,23 +690,25 @@ int main() {
 		//screenShader.SetFloat("exposure", exposure);
 		RenderQuad();
 		// ---------------
+		*/
 
 		// Render GUI
 		// ---------------
-		RenderImGui();
+		// RenderImGui();
 		// ---------------
 
 		// glfw: swap buffers and poll IO events
 		glfwSwapBuffers(window);
 		glfwPollEvents();
 	}
+	/*
 	// deleter buffers
 	glDeleteBuffers(1, &fbo);
 	glDeleteBuffers(1, &rbo);
 	glDeleteBuffers(1, &tcbo[0]);
 	glDeleteBuffers(1, &tcbo[1]);
 	glDeleteBuffers(1, &pingpongBuffer[0]);
-	glDeleteBuffers(1, &pingpongBuffer[1]);
+	glDeleteBuffers(1, &pingpongBuffer[1]);*/
 
 	// imgui: shutdown and cleanup
 	ImGui_ImplOpenGL3_Shutdown();
