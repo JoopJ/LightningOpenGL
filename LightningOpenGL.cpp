@@ -92,8 +92,6 @@ void ConfigureWindow();
 void RenderImGui();
 GLFWwindow* CreateWindow();
 void InitImGui(GLFWwindow* window);
-// renderers
-void RenderScene(const Shader& shader);
 
 int main() {
 	std::cout << "Testing Version" << std::endl << std::endl;
@@ -756,38 +754,6 @@ int main() {
 	glfwTerminate();
 	return 0;
 }
-
-// Renderers
-// ---------------
-// Render Scene
-// Only Sets the model matrix, other matrices should already be set
-void RenderScene(const Shader& shader) {
-	mat4 model = mat4(1.0f);
-	// Cubes
-	// room cube
-	model = mat4(1.0f);
-	model = glm::translate(model, vec3(0, 5, 0));
-	model = glm::scale(model, glm::vec3(50.0f));
-	shader.SetMat4("model", model);
-	glDisable(GL_CULL_FACE);
-	shader.SetInt("reverse_normals", 1);
-	RenderCube();
-	shader.SetInt("reverse_normals", 0);
-	glEnable(GL_CULL_FACE);
-
-	// other cubes
-	model = mat4(1.0f);
-	model = glm::translate(model, vec3(0, 20, 5));
-	model = glm::scale(model, vec3(2.5f));
-	shader.SetMat4("model", model);
-	RenderCube();
-	model = mat4(1.0f);
-	model = glm::translate(model, vec3(10, 15, 0));
-	model = glm::scale(model, vec3(5));
-	shader.SetMat4("model", model);
-	RenderCube();
-}
-// ---------------
 
 void SetLightPositionsUniformData(unsigned int uboLights, vec3 lightPos) {
 	// set data of Light Positions UBO
