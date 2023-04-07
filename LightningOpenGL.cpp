@@ -57,12 +57,12 @@ const vec3 startPnt = vec3(400, 30000, 0);
 int amount = 0;
 float exposure = 1.0f;
 // lighting options
-int attenuationChoice = 3;
+int attenuationChoice = 9;
 int atteunationRadius;
 float boltAlpha = 1.0f;
 vec3 boltColor = vec3(1.0f, 1.0f, 0.0f);
 // toggles
-bool shadows = true;
+bool shadowsEnabled = true;
 bool shadowKeyPressed = false;
 bool bloom = true;
 bool bloomKeyPressed = false;
@@ -86,9 +86,15 @@ void ProcessMiscInput(GLFWwindow* window, bool* firstButtonPress);
 bool ProcessLightningControlInput(GLFWwindow* window);
 // Config
 void ConfigureWindow();
-void RenderImGui();
 GLFWwindow* CreateWindow();
 void InitImGui(GLFWwindow* window);
+// GUI
+void RenderImGui();
+void BoltControlGUI();
+void PostProcessingGUI();
+void LightingGUI();
+
+vector<mat4> GenerateShadowTransforms(vec3 lightPos, mat4 shadowProj);
 
 int main() {
 	// Initial Configurations and Window Creation
@@ -151,6 +157,49 @@ int main() {
 	vector<pair<vec3, vec3>>* lightningDynamicPatternPtr = &lightningDynamicPattern;
 	// ---------------
 
+	// Specific options for light attenuation
+	vec3 attenuationOptions[12] = {
+		vec3(7, 0.7, 1.8),
+		vec3(13, 0.35, 0.44),
+		vec3(20, 0.22, 0.20),
+		vec3(32, 0.14, 0.07),
+		vec3(50, 0.09, 0.032),
+		vec3(65, 0.07, 0.017),
+		vec3(100, 0.045, 0.0075),
+		vec3(160, 0.027, 0.0028),
+		vec3(200, 0.022, 0.0019),
+		vec3(325, 0.014, 0.0007),
+		vec3(600, 0.007, 0.0002),
+		vec3(3250, 0.0014, 0.000007)
+	};
+
+	// Testing ---------
+	// Lighting Info
+	// ---------------
+	// Options
+	float linear = attenuationOptions[attenuationChoice].y;
+	float quadratic = attenuationOptions[attenuationChoice].z;
+	float near_plane = 1.0f, far_plane = 50.0f;
+	int NUM_LIGHTS = 3;	// must be less than or equal to MAX_POINT_LIGHTS
+	// Constants
+	const unsigned int SHADOW_WIDTH = 1024, SHADOW_HEIGHT = 1024;
+	const float aspect = (float)SHADOW_WIDTH / (float)SHADOW_HEIGHT;
+	const mat4 shadowProj = glm::perspective(glm::radians(90.0f), aspect, near_plane, far_plane);
+	const unsigned int MAX_POINT_LIGHTS = 10; // used to set the size of the cubemap array, should be the same
+											// as 
+	// ---------------
+	// mat4 lightRotateMat4 = glm::rotate(mat4(2.0), glm::radians(0.01f), vec3(0, 1, 0)); // used for rotating the lights
+	vector<vec3> lightPositions;
+	vec3 lightPos = vec3(0, 2, 0);
+	vec3 newPos;
+	// set light positions
+	for (int i = 0; i < NUM_LIGHTS; i++) {
+		// random variation
+		newPos = lightPos + vec3((rand() % 10) - 5, - 3 * i, (rand() % 10) - 5);
+		lightPositions.push_back(newPos);
+	}
+	// -----------------
+
 	// Bolt Objects Definition
 	// ---------------
 	// Set Method Properties:
@@ -183,135 +232,128 @@ int main() {
 
 	// Shaders
 	// ---------------
-	// Bolt
-	Shader boltShader = LoadShader("bolt.vs", "bolt.fs");
-	// Post Processing
-	Shader screenShader = LoadShader("screen.vs", "screen.fs");
-	Shader blurShader = LoadShader("blur.vs", "blur.fs");
-	// Lighting
-	Shader lightShader = LoadShader("light.vs", "light.fs");
-	Shader depthShader = LoadShader("depth.vs", "depth.fs", "depth.gs");
-	// Object
-	Shader objectShader = LoadShader("object.vs", "object.fs");
+	// Deferred Shadring
+	Shader lightCubeShader = LoadShader("light.vert", "light.frag");
+	Shader geometryPassShader = LoadShader("g_buffer.vert", "g_buffer.frag");
+	Shader lightingPassShader = LoadShader("lighting_pass.vert", "lighting_pass.frag");
+	Shader depthSingleCubemapShader = LoadShader("depth.vert", "depth.frag", "depth_single_cubemap.geom");
+	Shader depthMultipleCubemapShader = LoadShader("depth.vert", "depth.frag", "depth_multiple_cubemap.geom");
 
-	// Shader Configs
-	// set the location of texture uniforms for shaders
-	screenShader.Use();
-	screenShader.SetInt("screenTexture", 0);
-	screenShader.SetInt("bloomBlur", 1);
-
-	objectShader.Use();
-	objectShader.SetInt("diffuseTexture", 0);
-	objectShader.SetInt("depthMap", 1);
+	lightingPassShader.Use();
+	lightingPassShader.SetInt("gPosition", 0);
+	lightingPassShader.SetInt("gNormal", 1);
+	lightingPassShader.SetInt("gAlbedoSpec", 2);
+	lightingPassShader.SetInt("depthMap", 3);
+	lightingPassShader.SetInt("depthMapArray", 4);
 	// -------------------------
 
-	// Lighting
-	// -------------------------
-	// Specific options for light attenuation
-	vec3 attenuationOptions[12] = {
-		vec3(7, 0.7, 1.8),
-		vec3(13, 0.35, 0.44),
-		vec3(20, 0.22, 0.20),
-		vec3(32, 0.14, 0.07),
-		vec3(50, 0.09, 0.032),
-		vec3(65, 0.07, 0.017),
-		vec3(100, 0.045, 0.0075),
-		vec3(160, 0.027, 0.0028),
-		vec3(200, 0.022, 0.0019),
-		vec3(325, 0.014, 0.0007),
-		vec3(600, 0.007, 0.0002),
-		vec3(3250, 0.0014, 0.000007)
-	};
 	// ------------------------
-
-	// Shadows Objects
-	// ------------------------
-	const unsigned int SHADOW_WIDTH = 1024, SHADOW_HEIGHT = 1024;
-	// depth map FBO
+	// Shadows ----------------
+	// Depth Cubemap FBO ------
 	unsigned int depthMapFBO;
-	glGenFramebuffers(1, &depthMapFBO);
-	// depth cubematp texture
+	glGenFramebuffers(1, &depthMapFBO);	
+	// Depth Cubemap ---------
+	// ### 1 depth cubemap by itself
 	unsigned int depthCubemap;
 	glGenTextures(1, &depthCubemap);
-	// asign each of the cubemap faces a 2D depth-valued texture image (shadow map)
 	glBindTexture(GL_TEXTURE_CUBE_MAP, depthCubemap);
+	// assign each face a 2D depth-valued texture
 	for (unsigned int i = 0; i < 6; i++) {
 		glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_DEPTH_COMPONENT,
 			SHADOW_WIDTH, SHADOW_HEIGHT, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
 	}
+
 	// set texture parameters
-	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
-	// attach depth texture as FBO's depth buffer
+	// attach the cubemap as the framebuffers depth attachment
 	glBindFramebuffer(GL_FRAMEBUFFER, depthMapFBO);
 	glFramebufferTexture(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, depthCubemap, 0);
-	// tell OpenGL we don't want to render any color data
 	glDrawBuffer(GL_NONE);
 	glReadBuffer(GL_NONE);
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-	// ------------------------
 
-	// Rendering Objects
-	// ------------------------
-	// framebuffer object
-	unsigned int fbo;
-	glGenFramebuffers(1, &fbo);
-	glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+	// ### An array of depth cubemaps
+	// requires an appropriate fbo
+	unsigned int depthMapArrayFBO;
+	glGenFramebuffers(1, &depthMapArrayFBO);
+	// Depth Cubemap Array texture
+	unsigned int depthCubemapArray;
+	glGenTextures(1, &depthCubemapArray);
+	glBindTexture(GL_TEXTURE_CUBE_MAP_ARRAY, depthCubemapArray);
+	// assign the texture 
+	glTexImage3D(GL_TEXTURE_CUBE_MAP_ARRAY, 0 , GL_DEPTH_COMPONENT32, SHADOW_WIDTH, 
+		SHADOW_HEIGHT, 6 * MAX_POINT_LIGHTS, 0, GL_DEPTH_COMPONENT, GL_FLOAT, 0);
 
-	// texture color buffer objects
-	unsigned int tcbo[2];
-	// genereate and attach to framebuffer object (fbo)
-	glGenTextures(2, tcbo);
-	for (unsigned int i = 0; i < 2; i++) {
-		glBindTexture(GL_TEXTURE_2D, tcbo[i]);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, SCR_WIDTH, SCR_HEIGHT, 0, GL_RGBA, GL_FLOAT, NULL);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + i, GL_TEXTURE_2D, tcbo[i], 0);
-	}
+	// set texture parameters
+	glTexParameterf(GL_TEXTURE_CUBE_MAP_ARRAY, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameterf(GL_TEXTURE_CUBE_MAP_ARRAY, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
-	// depth and stencil buffer object
-	unsigned int rbo; // can be a renderbuffer object as we don't need to sample from it
-	glGenRenderbuffers(1, &rbo);
-	glBindRenderbuffer(GL_RENDERBUFFER, rbo);
-	// allocate storage and unbind
-	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, SCR_WIDTH, SCR_HEIGHT);
-	glBindRenderbuffer(GL_RENDERBUFFER, 0);
-	// attach to the framebuffer object (fbo)
-	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, rbo);
-	// tell opengl to render to multiple colorbuffers
-	unsigned int attachments[2] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
-	glDrawBuffers(2, attachments);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP_ARRAY, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP_ARRAY, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP_ARRAY, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+	//glTexParameteri(GL_TEXTURE_CUBE_MAP_ARRAY, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_REF_TO_TEXTURE);
+	glClear(GL_DEPTH_BUFFER_BIT); float borderColor[] = { 1.0f, 1.0f, 1.0f, 1.0f };
+	glTexParameterfv(GL_TEXTURE_CUBE_MAP_ARRAY, GL_TEXTURE_BORDER_COLOR, borderColor);
+	glTexParameterf(GL_TEXTURE_CUBE_MAP_ARRAY, GL_TEXTURE_BASE_LEVEL, 0);
 
-	// check fbo is complete
-	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
-		std::cout << "ERROR::FRAMEBUFFER:: Framebuffer is not complete!" << std::endl;
-	}
+	glBindFramebuffer(GL_FRAMEBUFFER, depthMapArrayFBO);
+	glFramebufferTexture(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, depthCubemapArray, 0);
+	glDrawBuffer(GL_NONE);
+	glReadBuffer(GL_NONE);
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	// -----------------------------
 
-	// ping pong buffers
-	unsigned int pingpongFBO[2];
-	unsigned int pingpongBuffer[2];
-	glGenFramebuffers(2, pingpongFBO);
-	glGenTextures(2, pingpongBuffer);
+	// G-Buffer --------------
+	glEnable(GL_DEPTH_TEST);
 
-	for (unsigned int i = 0; i < 2; i++) {
-		glBindFramebuffer(GL_FRAMEBUFFER, pingpongFBO[i]);
-		glBindTexture(GL_TEXTURE_2D, pingpongBuffer[i]);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, SCR_WIDTH, SCR_HEIGHT, 0, GL_RGBA, GL_FLOAT, NULL);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, pingpongBuffer[i], 0);
-	}
+	unsigned int gBuffer;
+	glGenFramebuffers(1, &gBuffer);
+	glBindFramebuffer(GL_FRAMEBUFFER, gBuffer);
+	unsigned int gPosition, gNormal, gAlbedoSpec;
+
+	// - position color buffer
+	glGenTextures(1, &gPosition);
+	glBindTexture(GL_TEXTURE_2D, gPosition);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, SCR_WIDTH, SCR_HEIGHT, 0, GL_RGBA, GL_FLOAT, NULL);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, gPosition, 0);
+
+	// - normal color buffer
+	glGenTextures(1, &gNormal);
+	glBindTexture(GL_TEXTURE_2D, gNormal);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, SCR_WIDTH, SCR_HEIGHT, 0, GL_RGBA, GL_FLOAT, NULL);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D, gNormal, 0);
+
+	// - color + specular color buffer
+	glGenTextures(1, &gAlbedoSpec);
+	glBindTexture(GL_TEXTURE_2D, gAlbedoSpec);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, SCR_WIDTH, SCR_HEIGHT, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT2, GL_TEXTURE_2D, gAlbedoSpec, 0);
+
+	// tell OpenGL which color attachments we'll use (of this framebuffer) for rendering 
+	unsigned int attachments[3] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2 };
+	glDrawBuffers(3, attachments);
+
+	// create and attach depth buffer (renderbuffer)
+	unsigned int rboDepth;
+	glGenRenderbuffers(1, &rboDepth);
+	glBindRenderbuffer(GL_RENDERBUFFER, rboDepth);
+	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, SCR_WIDTH, SCR_HEIGHT);
+	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, rboDepth);
+	// check if framebuffer is complete
+	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+		std::cout << "Framebuffer not complete!" << std::endl;
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-	// ----------------
+	// -----------------
 
 	// Performance Constructors
 	// -----------------
@@ -319,12 +361,6 @@ int main() {
 	mainLoop.SetPerSecondOutput(false);
 	mainLoop.SetAverageOutput(false);
 	mainLoop.Start();
-	// -----------------
-
-	// Testing ---------
-	// Rotate the Point light
-	mat4 lightRotateMat4 = glm::rotate(mat4(1.0), glm::radians(0.01f), vec3(0, 1, 0));
-	vec3 lightPos = vec3(0.0f, 10.0f, 18.0f);
 	// -----------------
 
 	// render loop
@@ -360,160 +396,122 @@ int main() {
 		}
 		// -----------------------
 
-		// Rendering
-		// -----------------------
-		lightPos = vec3(lightRotateMat4 * glm::vec4(lightPos, 1.0));
-		float aspect = (float)SHADOW_WIDTH / (float)SHADOW_HEIGHT;
-		// 0. create depth cubemap transformation matrices
-		// -----------
-		float near_plane = 0.1f, far_plane = 200.0f;
-		mat4 shadowProj = glm::perspective(radians(90.0f), aspect, near_plane, far_plane);
-		// create a transform matrix for each side of the cubemap
-		vector<mat4> shadowTransforms;
-		shadowTransforms.push_back(shadowProj * glm::lookAt(lightPos, 
-			lightPos + glm::vec3(1.0f, 0.0f, 0.0f), glm::vec3(0.0f, -1.0f, 0.0f))); // right
-		shadowTransforms.push_back(shadowProj * glm::lookAt(lightPos, 
-			lightPos + glm::vec3(-1.0f, 0.0f, 0.0f), glm::vec3(0.0f, -1.0f, 0.0f)));// left
-		shadowTransforms.push_back(shadowProj * glm::lookAt(lightPos, 
-			lightPos + glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f))); // top
-		shadowTransforms.push_back(shadowProj * glm::lookAt(lightPos, 
-			lightPos + glm::vec3(0.0f, -1.0f, 0.0f), glm::vec3(0.0f, 0.0f, -1.0f))); // bottom
-		shadowTransforms.push_back(shadowProj * glm::lookAt(lightPos, 
-			lightPos + glm::vec3(0.0f, 0.0f, 1.0f), glm::vec3(0.0f, -1.0f, 0.0f))); // near
-		shadowTransforms.push_back(shadowProj * glm::lookAt(lightPos, 
-			lightPos + glm::vec3(0.0f, 0.0f, -1.0f), glm::vec3(0.0f, -1.0f, 0.0f))); // far
-		
-		
-		// 1. render scene from light's point of view to depth cubemap
-		// ---------------------
-		glViewport(0, 0, SHADOW_WIDTH, SHADOW_HEIGHT);
-		glBindFramebuffer(GL_FRAMEBUFFER, depthMapFBO);
-		glClear(GL_DEPTH_BUFFER_BIT);
-		depthShader.Use();
-		for (unsigned int i = 0; i < 6; i++) {
-			depthShader.SetMat4("shadowMatrices[" + std::to_string(i) + "]", shadowTransforms[i]);
+		// Update Light Positions ---
+		for (int i = 0; i < lightPositions.size(); i++) {
+			vec3 pos = lightPositions[i];
+			// rotate point around y axis
+			pos = vec3(pos.x * cos(GetDeltaTime()) - pos.z * sin(GetDeltaTime()),
+								pos.y,
+								pos.x * sin(GetDeltaTime()) + pos.z * cos(GetDeltaTime()));
+			lightPositions[i] = pos;
 		}
-		depthShader.SetFloat("far_plane", far_plane);
-		depthShader.SetVec3("lightPos", lightPos);
-		// depth shader dosen't need view or projection
-		RenderScene(depthShader);
+		// --------------------------
 
-		// 2. render scene as normal to frame buffer object
-		// -------------------------
-		// First Pass, to framebuffer object (fbo)
-		glBindFramebuffer(GL_FRAMEBUFFER, fbo);
-		glViewport(0, 0, SCR_WIDTH, SCR_HEIGHT);
+		// Deferred Rendering
+		// -----------------------
+
+		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-		glClearColor(0.0, 0.0, 0.0, 1.0);
-		glEnable(GL_DEPTH_TEST);
 
-		// MVP
-		mat4 model;
-		// TODO Move to camera class
+		// 1. Geometry Pass: render all geometric/color data to g-buffer
+		// ---------------
+		glBindFramebuffer(GL_FRAMEBUFFER, gBuffer);
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+		mat4 model = mat4(1.0f);
 		mat4 view = lookAt(GetCameraPos(), GetCameraPos() + GetCameraFront(), GetCameraUp());
 		mat4 projection = glm::perspective(glm::radians(GetFOV()), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.0f);
 
+		geometryPassShader.Use();
+		SetVPMatricies(geometryPassShader, view, projection);
 
-		// Render Lightning Bolt
-		// -----------------
-		boltShader.Use();
-		boltShader.SetVec3("color", boltColor);
-		boltShader.SetFloat("alpha", boltAlpha);
-		SetVPMatricies(boltShader, view, projection);
-		if (DYNAMIC_BOLT)
-			DrawLineBolt(dynamicLineSegmentsPtr);
-		else
-			DrawLineBolt(staticLineSegmentsPtr);
-
-		// ------------------	
-	
-		// Objects
-		// ------------------
-		// Point Lights positioned along the bolt:
-		if (lightBoxesEnable) {
-			lightShader.Use();
-			SetVPMatricies(lightShader, view, projection);
-			if (DYNAMIC_BOLT) {
-				for (int i = 0; i < GetLightPerSegment() * dynamicLineSegmentsPtr->size(); i++) {
-					model = mat4(1.0f);
-					model = glm::translate(model, dynamicPointLightPositionsPtr->at(i));
-					model = glm::scale(model, vec3(0.3f));
-					lightShader.SetMat4("model", model);
-					RenderCube();
-				}
-			} else {
-				for (int i = 0; i < GetLightPerSegment() * numSegmentsInPattern; i++) {
-					model = mat4(1.0f);
-					model = glm::translate(model, staticPointLightPositionsPtr[i]);
-					model = glm::scale(model, vec3(0.3f));
-					lightShader.SetMat4("model", model);
-					RenderCube();
-				}
-			}
-			
-		}
-		// Shadow Point Light TODO: make dynamic and position along bolt
-		lightShader.Use();
-		model = mat4(1.0f);
-		model = glm::translate(model, lightPos);
-		model = glm::scale(model, vec3(0.3f));
-		SetMVPMatricies(lightShader, model, view, projection);
-		RenderCube();
-
-		// Light Affected Objects:
-		objectShader.Use();
-		objectShader.SetVec3("viewPos", GetCameraPos());
-		objectShader.SetVec3("lightPos", lightPos);
-		objectShader.SetFloat("far_plane", far_plane);
-		objectShader.SetBool("shadows", shadows);
-
-		model = mat4(1.0f);
-		SetMVPMatricies(objectShader, model, view, projection);
-		// bind diffuse texture and depth cube map
-		glActiveTexture(GL_TEXTURE0);	// diffuse texture
+		// bind diffuse texture
+		glActiveTexture(GL_TEXTURE0);
 		glBindTexture(GL_TEXTURE_2D, metalWallTexture);
-		glActiveTexture(GL_TEXTURE1);	// depth cubemap
-		glBindTexture(GL_TEXTURE_CUBE_MAP, depthCubemap);
-		RenderScene(objectShader);
-		// ---------------
-		
-		// Post Processing
-		// ---------------
-		// Blur
-		bool horizontal = true, first_iteration = true;
-		blurShader.Use();
-		// blur the texture
-		for (int i = 0; i < amount+1; i++)
-		{
-			glBindFramebuffer(GL_FRAMEBUFFER, pingpongFBO[horizontal]);
-			blurShader.SetInt("horizontal", horizontal);
-			// bind texutre of other framebuffer, or the texture to blur if first iteration
-			glActiveTexture(GL_TEXTURE0);
-			glBindTexture(GL_TEXTURE_2D, first_iteration ? tcbo[1] : pingpongBuffer[!horizontal]);
-			// render quad
-			RenderQuad();
-			// swap buffers
-			horizontal = !horizontal;
-			if (first_iteration) {
-				first_iteration = false;
-			}
-		}
-		// ---------------
-		
-		// Second Pass, to default framebuffer
+		RenderScene(geometryPassShader);
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+		// Lighting Pass
+		// ----------------------------------------------------------------------------------------
+		// Update Lighting Options
+		linear = attenuationOptions[attenuationChoice].y;
+		quadratic = attenuationOptions[attenuationChoice].z;
+		// far_plane = ;
+
+		// ~ Calculate shadow maps for the lights		
+		// 0.1 Render scene of all lights to depth cubemap array --------------------------------
+		// Prepare each light for rendering
+		glEnable(GL_DEPTH_TEST);
+		glViewport(0, 0, SHADOW_WIDTH, SHADOW_HEIGHT);
+		glBindFramebuffer(GL_FRAMEBUFFER, depthMapArrayFBO);
+		glClear(GL_DEPTH_BUFFER_BIT);
+		depthMultipleCubemapShader.Use();
+		depthMultipleCubemapShader.SetFloat("far_plane", far_plane); // far_plane is constant for all lights
+		vector<mat4> shadowTransforms;
+		for (unsigned int light = 0; light < NUM_LIGHTS; light++) {
+			// For each light...
+			shadowTransforms = GenerateShadowTransforms(lightPositions[light], shadowProj);
+			for (unsigned int i = 0; i < 6; i++) {
+				// For each face of the cubemap...
+				depthMultipleCubemapShader.SetMat4("shadowMatrices[" + std::to_string(i) + "]", shadowTransforms[i]);
+			}
+			depthMultipleCubemapShader.SetInt("index", light);
+			depthMultipleCubemapShader.SetVec3("lightPos", lightPositions[light]);
+			RenderScene(depthMultipleCubemapShader);
+		}
+
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+		// ----------------------------------------------------------------------------------------
+
+		// 2. Lighting Pass: calculate lighting by iterating over a screen filled quad pixel-by-pixel using the g-buffer's content.
 		glViewport(0, 0, SCR_WIDTH, SCR_HEIGHT);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-		screenShader.Use();
+		lightingPassShader.Use();
 		glActiveTexture(GL_TEXTURE0);
-		glBindTexture(GL_TEXTURE_2D, tcbo[0]);
+		glBindTexture(GL_TEXTURE_2D, gPosition);
 		glActiveTexture(GL_TEXTURE1);
-		glBindTexture(GL_TEXTURE_2D, pingpongBuffer[!horizontal]);
-		screenShader.SetBool("bloom", bloom);
-		//screenShader.SetFloat("exposure", exposure);
+		glBindTexture(GL_TEXTURE_2D, gNormal);
+		glActiveTexture(GL_TEXTURE2);
+		glBindTexture(GL_TEXTURE_2D, gAlbedoSpec);
+		// attach depth map for shadows
+		glActiveTexture(GL_TEXTURE4);
+		glBindTexture(GL_TEXTURE_CUBE_MAP_ARRAY, depthCubemapArray);
+		// also send light relevant uniforms
+		lightingPassShader.SetFloat("Linear", linear);
+		lightingPassShader.SetFloat("Quadratic", quadratic);
+		lightingPassShader.SetVec3("lightColor", vec3(1.0f, 1.0f, 1.0f));
+		lightingPassShader.SetVec3("viewPos", GetCameraPos());
+		lightingPassShader.SetFloat("far_plane", far_plane);
+		lightingPassShader.SetInt("numLightsActive", NUM_LIGHTS);
+		lightingPassShader.SetBool("shadows", shadowsEnabled);
+	
+		// add light positions
+		for (int i = 0; i < NUM_LIGHTS; i++) {
+			lightingPassShader.SetVec3("lightPositions[" + std::to_string(i) + "]", lightPositions[i]);
+		}
 		RenderQuad();
-		// ---------------
+
+		// 2.5 copy contents of geometry's depth buffer to default framebuffer's depth buffer
+		// -----------------
+		glBindFramebuffer(GL_READ_FRAMEBUFFER, gBuffer);
+		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0); // write to default framebuffer
+		// blit to default framebuffer.
+		glBlitFramebuffer(0, 0, SCR_WIDTH, SCR_HEIGHT, 0, 0, SCR_WIDTH, SCR_HEIGHT, GL_DEPTH_BUFFER_BIT, GL_NEAREST);
+		glBindBuffer(GL_FRAMEBUFFER, 0);
+
+		// -----------------------
+
+		lightCubeShader.Use();
+		SetVPMatricies(lightCubeShader, view, projection);
+		for (unsigned int i = 0; i < lightPositions.size(); i++) {
+			// For each light...
+			model = mat4(1);
+			model = glm::translate(model, lightPositions[i]);
+			model = glm::scale(model, vec3(0.5f));
+			lightCubeShader.SetMat4("model", model);
+			RenderCube();
+		}
+
 
 		// Render GUI
 		// ---------------
@@ -525,12 +523,14 @@ int main() {
 		glfwPollEvents();
 	}
 	// deleter buffers
+	/*
 	glDeleteBuffers(1, &fbo);
 	glDeleteBuffers(1, &rbo);
 	glDeleteBuffers(1, &tcbo[0]);
 	glDeleteBuffers(1, &tcbo[1]);
 	glDeleteBuffers(1, &pingpongBuffer[0]);
 	glDeleteBuffers(1, &pingpongBuffer[1]);
+	*/
 
 	// imgui: shutdown and cleanup
 	ImGui_ImplOpenGL3_Shutdown();
@@ -598,7 +598,7 @@ void ProcessMiscInput(GLFWwindow* window, bool* firstButtonPress) {
 
 	if (glfwGetKey(window, GLFW_KEY_V) == GLFW_PRESS && !shadowKeyPressed)
 	{
-		shadows = !shadows;
+		shadowsEnabled = !shadowsEnabled;
 		shadowKeyPressed = true;
 	}
 	if (glfwGetKey(window, GLFW_KEY_V) == GLFW_RELEASE)
@@ -643,21 +643,29 @@ void RenderImGui() {
 	ImGui_ImplGlfw_NewFrame();
 	ImGui::NewFrame();
 
-	//ImGui::Begin("Lightning");
-	//GUINaiveApproach();
+	//BoltControlGUI();
 
-	// Bolt Control window
+	//PostProcessingGUI();
+
+	LightingGUI();
+
+	ImGui::Render();
+	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+}
+
+void BoltControlGUI() {
 	ImGui::Begin("Bolt Options");
 	if (ImGui::Combo("Methods", &methodChoice, methodNames, 2)) {
 		SetMethod(methodChoice);
 	}
 
 	if (ImGui::Button(DYNAMIC_BOLT ? "Dynamic" : "Static")) {
-			DYNAMIC_BOLT = !DYNAMIC_BOLT;
+		DYNAMIC_BOLT = !DYNAMIC_BOLT;
 	}
 	if (DYNAMIC_BOLT) {
 		ImGui::Text("DYNAMIC INFO HERE");
-	} else {
+	}
+	else {
 		ImGui::Text("STATIC INFO HERE");
 	}
 
@@ -667,26 +675,26 @@ void RenderImGui() {
 	ImGui::SliderFloat("Bolt Alpha", &boltAlpha, 0, 1);
 
 	ImGui::End();
+}
 
+void PostProcessingGUI() {
 	ImGui::Begin("Post Processing");
 	ImGui::SliderInt("Blur Amount", &amount, 0, 15);
 	ImGui::SliderFloat("Exposure", &exposure, 0.1, 100);
-
 	ImGui::End();
+}
 
+void LightingGUI() {
 	ImGui::Begin("Lighting");
 	ImGui::Text("Attenuation");
 	ImGui::Text("Radius: %d", atteunationRadius);
 	ImGui::SliderInt("##", &attenuationChoice, 0, 11);
 
 	ImGui::End();
-
-	ImGui::Render();
-	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 }
 
 GLFWwindow* CreateWindow() {
-	GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "drawing lines", NULL, NULL);
+	GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "Deferred Point Shadow Mapping", NULL, NULL);
 	if (window == NULL) {
 		std::cout << "Failed to create GLFW window" << std::endl;
 		glfwTerminate();
@@ -711,5 +719,18 @@ void InitImGui(GLFWwindow* window) {
 	ImGui::StyleColorsDark();
 	ImGui_ImplGlfw_InitForOpenGL(window, true);
 	ImGui_ImplOpenGL3_Init("#version 460");
+}
+
+vector<mat4> GenerateShadowTransforms(vec3 lightPos, mat4 shadowProj) {
+	// Create 6 transformation matrices, one for each face of the cube
+	vector<mat4> shadowTransforms;
+	shadowTransforms.push_back(shadowProj * lookAt(lightPos, lightPos + vec3(1.0, 0.0, 0.0), vec3(0.0, -1.0, 0.0)));
+	shadowTransforms.push_back(shadowProj * lookAt(lightPos, lightPos + vec3(-1.0, 0.0, 0.0), vec3(0.0, -1.0, 0.0)));
+	shadowTransforms.push_back(shadowProj * lookAt(lightPos, lightPos + vec3(0.0, 1.0, 0.0), vec3(0.0, 0.0, 1.0)));
+	shadowTransforms.push_back(shadowProj * lookAt(lightPos, lightPos + vec3(0.0, -1.0, 0.0), vec3(0.0, 0.0, -1.0)));
+	shadowTransforms.push_back(shadowProj * lookAt(lightPos, lightPos + vec3(0.0, 0.0, 1.0), vec3(0.0, -1.0, 0.0)));
+	shadowTransforms.push_back(shadowProj * lookAt(lightPos, lightPos + vec3(0.0, 0.0, -1.0), vec3(0.0, -1.0, 0.0)));
+
+	return shadowTransforms;
 }
 

@@ -5,6 +5,12 @@ unsigned int cubeVAO = 0;
 unsigned int floorVAO = 0;
 unsigned int wallVAO = 0;
 
+// Random Boxes
+vec3 boxPositions[10];
+bool boxPositionsSet = false;
+const int numBoxes = 5;
+const int range = 15;
+
 // Render Scene
 // Only Sets the model matrix, other matrices should already be set
 void RenderScene(const Shader& shader) {
@@ -13,7 +19,7 @@ void RenderScene(const Shader& shader) {
 	// room cube
 	model = mat4(1.0f);
 	model = glm::translate(model, vec3(0, 5, 0));
-	model = glm::scale(model, glm::vec3(50.0f));
+	model = glm::scale(model, glm::vec3(20.0f));
 	shader.SetMat4("model", model);
 	glDisable(GL_CULL_FACE);
 	shader.SetInt("reverse_normals", 1);
@@ -21,6 +27,27 @@ void RenderScene(const Shader& shader) {
 	shader.SetInt("reverse_normals", 0);
 	glEnable(GL_CULL_FACE);
 
+	// Shadow Testing Room
+	if (!boxPositionsSet) { // set random box positions
+		for (int box = 0; box < numBoxes; box++) {
+			// get random positions
+			float x = (rand() % (range * 2)) - range;
+			float y = (rand() % (range * 2)) - range;
+			float z = (rand() % (range * 2)) - range;
+			boxPositions[box] = vec3(x, y, z);
+		}
+		boxPositionsSet = true;
+	}
+
+	for (int box = 0; box < numBoxes; box++) {
+		model = mat4(1);
+		model = glm::translate(model, boxPositions[box]);
+		model = glm::scale(model, glm::vec3(3));
+		shader.SetMat4("model", model);
+		RenderCube();
+	}
+
+	/*
 	// other cubes
 	model = mat4(1.0f);
 	model = glm::translate(model, vec3(0, 20, 5));
@@ -32,6 +59,19 @@ void RenderScene(const Shader& shader) {
 	model = glm::scale(model, vec3(5));
 	shader.SetMat4("model", model);
 	RenderCube();
+	model = mat4(1.0f);
+	model = glm::translate(model, vec3(-19, 15, 8));
+	model = glm::scale(model, vec3(5));
+	shader.SetMat4("model", model);
+	RenderCube();
+
+	// Floor
+	model = mat4(1.0f);
+	model = glm::translate(model, vec3(0, 1, 0));
+	model = glm::scale(model, vec3(1.0f));
+	shader.SetMat4("model", model);
+	RenderFloor();
+	*/
 }
 // ---------------
 
@@ -141,14 +181,14 @@ void RenderFloor() {
 		float width = 40.0f;
 		float height = 0.0f;
 		float floorVertices[48] = {
-			// positions          // normals           // texture coords
-			width, height, width,  0.0f, 1.0f, 0.0f,   25.0f, 0.0f,
-			-width, height, width,  0.0f, 1.0f, 0.0f,   0.0f, 0.0f,
+			 // positions            // normals          // texture coords
+			 width, height, width,   0.0f, 1.0f, 0.0f,   25.0f, 0.0f,
+			-width, height, width,   0.0f, 1.0f, 0.0f,   0.0f, 0.0f,
 			-width, height, -width,  0.0f, 1.0f, 0.0f,   0.0f, 25.0f,
 
-			width, height, width,  0.0f, 1.0f, 0.0f,   25.0f, 0.0f,
+			 width, height, width,   0.0f, 1.0f, 0.0f,   25.0f, 0.0f,
 			-width, height, -width,  0.0f, 1.0f, 0.0f,   0.0f, 25.0f,
-			width, height, -width,  0.0f, 1.0f, 0.0f,   25.0f, 25.0f
+			 width, height, -width,  0.0f, 1.0f, 0.0f,   25.0f, 25.0f
 		};
 		unsigned int floorVBO;
 		glGenVertexArrays(1, &floorVAO);
