@@ -41,6 +41,7 @@ ImGui is used for the GUI which allows editting of various variables used to gen
 #include "Shader/Shader.h"
 #include "Shader/ShaderSetup.h"
 #include "Managers/LightManager.h"
+#include "Managers/G_Buffer.h"
 #include "FunctionLibrary.h"
 #include "CameraControl.h"
 #include "Renderer.h"
@@ -221,51 +222,7 @@ int main() {
 	// -------------------------
 
 	// G-Buffer --------------
-	glEnable(GL_DEPTH_TEST);
-
-	unsigned int gBuffer;
-	glGenFramebuffers(1, &gBuffer);
-	glBindFramebuffer(GL_FRAMEBUFFER, gBuffer);
-	unsigned int gPosition, gNormal, gAlbedoSpec;
-
-	// - position color buffer
-	glGenTextures(1, &gPosition);
-	glBindTexture(GL_TEXTURE_2D, gPosition);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, SCR_WIDTH, SCR_HEIGHT, 0, GL_RGBA, GL_FLOAT, NULL);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, gPosition, 0);
-
-	// - normal color buffer
-	glGenTextures(1, &gNormal);
-	glBindTexture(GL_TEXTURE_2D, gNormal);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, SCR_WIDTH, SCR_HEIGHT, 0, GL_RGBA, GL_FLOAT, NULL);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D, gNormal, 0);
-
-	// - color + specular color buffer
-	glGenTextures(1, &gAlbedoSpec);
-	glBindTexture(GL_TEXTURE_2D, gAlbedoSpec);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, SCR_WIDTH, SCR_HEIGHT, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT2, GL_TEXTURE_2D, gAlbedoSpec, 0);
-
-	// tell OpenGL which color attachments we'll use (of this framebuffer) for rendering 
-	unsigned int attachments[3] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2 };
-	glDrawBuffers(3, attachments);
-
-	// create and attach depth buffer (renderbuffer)
-	unsigned int rboDepth;
-	glGenRenderbuffers(1, &rboDepth);
-	glBindRenderbuffer(GL_RENDERBUFFER, rboDepth);
-	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, SCR_WIDTH, SCR_HEIGHT);
-	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, rboDepth);
-	// check if framebuffer is complete
-	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
-		std::cout << "Framebuffer not complete!" << std::endl;
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	G_Buffer gBuffer(SCR_WIDTH, SCR_HEIGHT);
 	// -----------------
 
 	// Performance Constructors
@@ -322,14 +279,13 @@ int main() {
 		// --------------------------
 
 		// Deferred Rendering
-		// -----------------------
-
+		// --------------------------
 		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 		// 1. Geometry Pass: render all geometric/color data to g-buffer
 		// ---------------
-		glBindFramebuffer(GL_FRAMEBUFFER, gBuffer);
+		gBuffer.Bind();
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 		mat4 model = mat4(1.0f);
@@ -345,24 +301,20 @@ int main() {
 		RenderScene(geometryPassShader);
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-		// Lighting Pass
-		// ----------------------------------------------------------------------------------------
 		// Generate Shadow Maps
 		lightManager.RenderDepthMaps();
 
 
-		// 2. Lighting Pass: calculate lighting by iterating over a screen filled quad pixel-by-pixel using the g-buffer's content.
+		// 2. Lighting Pass: calculate lighting by iterating over a screen filled quad 
+		//					 pixel-by-pixel using the g-buffer's content.
+		// -----------------
 		glViewport(0, 0, SCR_WIDTH, SCR_HEIGHT);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 		lightingPassShader.Use();
-		glActiveTexture(GL_TEXTURE0);
-		glBindTexture(GL_TEXTURE_2D, gPosition);
-		glActiveTexture(GL_TEXTURE1);
-		glBindTexture(GL_TEXTURE_2D, gNormal);
-		glActiveTexture(GL_TEXTURE2);
-		glBindTexture(GL_TEXTURE_2D, gAlbedoSpec);
+
+		gBuffer.BindTextures();
 		lightManager.BindCubeMapArray();
-		// also send light relevant uniforms
+
 		lightManager.SetLightingPassUniforms(&lightingPassShader);
 		lightingPassShader.SetVec3("viewPos", GetCameraPos());
 		lightingPassShader.SetBool("shadows", shadowsEnabled);
@@ -370,7 +322,7 @@ int main() {
 
 		// 2.5 copy contents of geometry's depth buffer to default framebuffer's depth buffer
 		// -----------------
-		glBindFramebuffer(GL_READ_FRAMEBUFFER, gBuffer);
+		gBuffer.BindRead();
 		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0); // write to default framebuffer
 		// blit to default framebuffer.
 		glBlitFramebuffer(0, 0, SCR_WIDTH, SCR_HEIGHT, 0, 0, SCR_WIDTH, SCR_HEIGHT, GL_DEPTH_BUFFER_BIT, GL_NEAREST);
