@@ -40,6 +40,7 @@ ImGui is used for the GUI which allows editting of various variables used to gen
 #include "BoltGeneration/BoltSetup.h"
 #include "Shader/Shader.h"
 #include "Shader/ShaderSetup.h"
+#include "Managers/LightManager.h"
 #include "FunctionLibrary.h"
 #include "CameraControl.h"
 #include "Renderer.h"
@@ -56,9 +57,7 @@ const vec3 startPnt = vec3(400, 30000, 0);
 // post processing
 int amount = 0;
 float exposure = 1.0f;
-// lighting options
-int attenuationChoice = 9;
-int atteunationRadius;
+// lightning options
 float boltAlpha = 1.0f;
 vec3 boltColor = vec3(1.0f, 1.0f, 0.0f);
 // toggles
@@ -89,12 +88,9 @@ void ConfigureWindow();
 GLFWwindow* CreateWindow();
 void InitImGui(GLFWwindow* window);
 // GUI
-void RenderImGui();
+void RenderImGui(LightManager* lm);
 void BoltControlGUI();
 void PostProcessingGUI();
-void LightingGUI();
-
-vector<mat4> GenerateShadowTransforms(vec3 lightPos, mat4 shadowProj);
 
 int main() {
 	// Initial Configurations and Window Creation
@@ -157,43 +153,13 @@ int main() {
 	vector<pair<vec3, vec3>>* lightningDynamicPatternPtr = &lightningDynamicPattern;
 	// ---------------
 
-	// Specific options for light attenuation
-	vec3 attenuationOptions[12] = {
-		vec3(7, 0.7, 1.8),
-		vec3(13, 0.35, 0.44),
-		vec3(20, 0.22, 0.20),
-		vec3(32, 0.14, 0.07),
-		vec3(50, 0.09, 0.032),
-		vec3(65, 0.07, 0.017),
-		vec3(100, 0.045, 0.0075),
-		vec3(160, 0.027, 0.0028),
-		vec3(200, 0.022, 0.0019),
-		vec3(325, 0.014, 0.0007),
-		vec3(600, 0.007, 0.0002),
-		vec3(3250, 0.0014, 0.000007)
-	};
-
 	// Testing ---------
-	// Lighting Info
-	// ---------------
-	// Options
-	float linear = attenuationOptions[attenuationChoice].y;
-	float quadratic = attenuationOptions[attenuationChoice].z;
-	float near_plane = 1.0f, far_plane = 50.0f;
-	int NUM_LIGHTS = 3;	// must be less than or equal to MAX_POINT_LIGHTS
-	// Constants
-	const unsigned int SHADOW_WIDTH = 1024, SHADOW_HEIGHT = 1024;
-	const float aspect = (float)SHADOW_WIDTH / (float)SHADOW_HEIGHT;
-	const mat4 shadowProj = glm::perspective(glm::radians(90.0f), aspect, near_plane, far_plane);
-	const unsigned int MAX_POINT_LIGHTS = 10; // used to set the size of the cubemap array, should be the same
-											// as 
-	// ---------------
 	// mat4 lightRotateMat4 = glm::rotate(mat4(2.0), glm::radians(0.01f), vec3(0, 1, 0)); // used for rotating the lights
 	vector<vec3> lightPositions;
 	vec3 lightPos = vec3(0, 2, 0);
 	vec3 newPos;
 	// set light positions
-	for (int i = 0; i < NUM_LIGHTS; i++) {
+	for (int i = 0; i < 5; i++) {
 		// random variation
 		newPos = lightPos + vec3((rand() % 10) - 5, - 3 * i, (rand() % 10) - 5);
 		lightPositions.push_back(newPos);
@@ -236,76 +202,23 @@ int main() {
 	Shader lightCubeShader = LoadShader("light.vert", "light.frag");
 	Shader geometryPassShader = LoadShader("g_buffer.vert", "g_buffer.frag");
 	Shader lightingPassShader = LoadShader("lighting_pass.vert", "lighting_pass.frag");
-	Shader depthSingleCubemapShader = LoadShader("depth.vert", "depth.frag", "depth_single_cubemap.geom");
-	Shader depthMultipleCubemapShader = LoadShader("depth.vert", "depth.frag", "depth_multiple_cubemap.geom");
+	Shader depthShader = LoadShader("depth.vert", "depth.frag", "depth_multiple_cubemap.geom");
 
 	lightingPassShader.Use();
 	lightingPassShader.SetInt("gPosition", 0);
 	lightingPassShader.SetInt("gNormal", 1);
 	lightingPassShader.SetInt("gAlbedoSpec", 2);
-	lightingPassShader.SetInt("depthMap", 3);
-	lightingPassShader.SetInt("depthMapArray", 4);
+	lightingPassShader.SetInt("depthMapArray", 3);
+	
+	lightCubeShader.Use();
+	lightCubeShader.SetVec3("lightColor", vec3(1));
 	// -------------------------
 
-	// ------------------------
-	// Shadows ----------------
-	// Depth Cubemap FBO ------
-	unsigned int depthMapFBO;
-	glGenFramebuffers(1, &depthMapFBO);	
-	// Depth Cubemap ---------
-	// ### 1 depth cubemap by itself
-	unsigned int depthCubemap;
-	glGenTextures(1, &depthCubemap);
-	glBindTexture(GL_TEXTURE_CUBE_MAP, depthCubemap);
-	// assign each face a 2D depth-valued texture
-	for (unsigned int i = 0; i < 6; i++) {
-		glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_DEPTH_COMPONENT,
-			SHADOW_WIDTH, SHADOW_HEIGHT, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
-	}
-
-	// set texture parameters
-	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
-	// attach the cubemap as the framebuffers depth attachment
-	glBindFramebuffer(GL_FRAMEBUFFER, depthMapFBO);
-	glFramebufferTexture(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, depthCubemap, 0);
-	glDrawBuffer(GL_NONE);
-	glReadBuffer(GL_NONE);
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
-	// ### An array of depth cubemaps
-	// requires an appropriate fbo
-	unsigned int depthMapArrayFBO;
-	glGenFramebuffers(1, &depthMapArrayFBO);
-	// Depth Cubemap Array texture
-	unsigned int depthCubemapArray;
-	glGenTextures(1, &depthCubemapArray);
-	glBindTexture(GL_TEXTURE_CUBE_MAP_ARRAY, depthCubemapArray);
-	// assign the texture 
-	glTexImage3D(GL_TEXTURE_CUBE_MAP_ARRAY, 0 , GL_DEPTH_COMPONENT32, SHADOW_WIDTH, 
-		SHADOW_HEIGHT, 6 * MAX_POINT_LIGHTS, 0, GL_DEPTH_COMPONENT, GL_FLOAT, 0);
-
-	// set texture parameters
-	glTexParameterf(GL_TEXTURE_CUBE_MAP_ARRAY, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	glTexParameterf(GL_TEXTURE_CUBE_MAP_ARRAY, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-
-	glTexParameteri(GL_TEXTURE_CUBE_MAP_ARRAY, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_CUBE_MAP_ARRAY, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_CUBE_MAP_ARRAY, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
-	//glTexParameteri(GL_TEXTURE_CUBE_MAP_ARRAY, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_REF_TO_TEXTURE);
-	glClear(GL_DEPTH_BUFFER_BIT); float borderColor[] = { 1.0f, 1.0f, 1.0f, 1.0f };
-	glTexParameterfv(GL_TEXTURE_CUBE_MAP_ARRAY, GL_TEXTURE_BORDER_COLOR, borderColor);
-	glTexParameterf(GL_TEXTURE_CUBE_MAP_ARRAY, GL_TEXTURE_BASE_LEVEL, 0);
-
-	glBindFramebuffer(GL_FRAMEBUFFER, depthMapArrayFBO);
-	glFramebufferTexture(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, depthCubemapArray, 0);
-	glDrawBuffer(GL_NONE);
-	glReadBuffer(GL_NONE);
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-	// -----------------------------
+	// Light Manager Setup -----
+	LightManager lightManager;
+	lightManager.Init(&depthShader);
+	lightManager.SetLightPositions(lightPositions, lightPositions.size());
+	// -------------------------
 
 	// G-Buffer --------------
 	glEnable(GL_DEPTH_TEST);
@@ -405,6 +318,7 @@ int main() {
 								pos.x * sin(GetDeltaTime()) + pos.z * cos(GetDeltaTime()));
 			lightPositions[i] = pos;
 		}
+		lightManager.SetLightPositions(lightPositions, lightPositions.size());
 		// --------------------------
 
 		// Deferred Rendering
@@ -433,35 +347,9 @@ int main() {
 
 		// Lighting Pass
 		// ----------------------------------------------------------------------------------------
-		// Update Lighting Options
-		linear = attenuationOptions[attenuationChoice].y;
-		quadratic = attenuationOptions[attenuationChoice].z;
-		// far_plane = ;
+		// Generate Shadow Maps
+		lightManager.RenderDepthMaps();
 
-		// ~ Calculate shadow maps for the lights		
-		// 0.1 Render scene of all lights to depth cubemap array --------------------------------
-		// Prepare each light for rendering
-		glEnable(GL_DEPTH_TEST);
-		glViewport(0, 0, SHADOW_WIDTH, SHADOW_HEIGHT);
-		glBindFramebuffer(GL_FRAMEBUFFER, depthMapArrayFBO);
-		glClear(GL_DEPTH_BUFFER_BIT);
-		depthMultipleCubemapShader.Use();
-		depthMultipleCubemapShader.SetFloat("far_plane", far_plane); // far_plane is constant for all lights
-		vector<mat4> shadowTransforms;
-		for (unsigned int light = 0; light < NUM_LIGHTS; light++) {
-			// For each light...
-			shadowTransforms = GenerateShadowTransforms(lightPositions[light], shadowProj);
-			for (unsigned int i = 0; i < 6; i++) {
-				// For each face of the cubemap...
-				depthMultipleCubemapShader.SetMat4("shadowMatrices[" + std::to_string(i) + "]", shadowTransforms[i]);
-			}
-			depthMultipleCubemapShader.SetInt("index", light);
-			depthMultipleCubemapShader.SetVec3("lightPos", lightPositions[light]);
-			RenderScene(depthMultipleCubemapShader);
-		}
-
-		glBindFramebuffer(GL_FRAMEBUFFER, 0);
-		// ----------------------------------------------------------------------------------------
 
 		// 2. Lighting Pass: calculate lighting by iterating over a screen filled quad pixel-by-pixel using the g-buffer's content.
 		glViewport(0, 0, SCR_WIDTH, SCR_HEIGHT);
@@ -473,22 +361,11 @@ int main() {
 		glBindTexture(GL_TEXTURE_2D, gNormal);
 		glActiveTexture(GL_TEXTURE2);
 		glBindTexture(GL_TEXTURE_2D, gAlbedoSpec);
-		// attach depth map for shadows
-		glActiveTexture(GL_TEXTURE4);
-		glBindTexture(GL_TEXTURE_CUBE_MAP_ARRAY, depthCubemapArray);
+		lightManager.BindCubeMapArray();
 		// also send light relevant uniforms
-		lightingPassShader.SetFloat("Linear", linear);
-		lightingPassShader.SetFloat("Quadratic", quadratic);
-		lightingPassShader.SetVec3("lightColor", vec3(1.0f, 1.0f, 1.0f));
+		lightManager.SetLightingPassUniforms(&lightingPassShader);
 		lightingPassShader.SetVec3("viewPos", GetCameraPos());
-		lightingPassShader.SetFloat("far_plane", far_plane);
-		lightingPassShader.SetInt("numLightsActive", NUM_LIGHTS);
 		lightingPassShader.SetBool("shadows", shadowsEnabled);
-	
-		// add light positions
-		for (int i = 0; i < NUM_LIGHTS; i++) {
-			lightingPassShader.SetVec3("lightPositions[" + std::to_string(i) + "]", lightPositions[i]);
-		}
 		RenderQuad();
 
 		// 2.5 copy contents of geometry's depth buffer to default framebuffer's depth buffer
@@ -501,6 +378,7 @@ int main() {
 
 		// -----------------------
 
+		// Render Light Cubes
 		lightCubeShader.Use();
 		SetVPMatricies(lightCubeShader, view, projection);
 		for (unsigned int i = 0; i < lightPositions.size(); i++) {
@@ -512,25 +390,15 @@ int main() {
 			RenderCube();
 		}
 
-
 		// Render GUI
 		// ---------------
-		RenderImGui();
+		RenderImGui(&lightManager);
 		// ---------------
 
 		// glfw: swap buffers and poll IO events
 		glfwSwapBuffers(window);
 		glfwPollEvents();
 	}
-	// deleter buffers
-	/*
-	glDeleteBuffers(1, &fbo);
-	glDeleteBuffers(1, &rbo);
-	glDeleteBuffers(1, &tcbo[0]);
-	glDeleteBuffers(1, &tcbo[1]);
-	glDeleteBuffers(1, &pingpongBuffer[0]);
-	glDeleteBuffers(1, &pingpongBuffer[1]);
-	*/
 
 	// imgui: shutdown and cleanup
 	ImGui_ImplOpenGL3_Shutdown();
@@ -638,7 +506,7 @@ void ConfigureWindow() {
 
 // GUI:
 std::string dynamicText = "Dynamic";
-void RenderImGui() {
+void RenderImGui(LightManager* lm) {
 	ImGui_ImplOpenGL3_NewFrame();
 	ImGui_ImplGlfw_NewFrame();
 	ImGui::NewFrame();
@@ -647,7 +515,7 @@ void RenderImGui() {
 
 	//PostProcessingGUI();
 
-	LightingGUI();
+	lm->LightingGUI();
 
 	ImGui::Render();
 	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
@@ -684,15 +552,6 @@ void PostProcessingGUI() {
 	ImGui::End();
 }
 
-void LightingGUI() {
-	ImGui::Begin("Lighting");
-	ImGui::Text("Attenuation");
-	ImGui::Text("Radius: %d", atteunationRadius);
-	ImGui::SliderInt("##", &attenuationChoice, 0, 11);
-
-	ImGui::End();
-}
-
 GLFWwindow* CreateWindow() {
 	GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "Deferred Point Shadow Mapping", NULL, NULL);
 	if (window == NULL) {
@@ -719,18 +578,5 @@ void InitImGui(GLFWwindow* window) {
 	ImGui::StyleColorsDark();
 	ImGui_ImplGlfw_InitForOpenGL(window, true);
 	ImGui_ImplOpenGL3_Init("#version 460");
-}
-
-vector<mat4> GenerateShadowTransforms(vec3 lightPos, mat4 shadowProj) {
-	// Create 6 transformation matrices, one for each face of the cube
-	vector<mat4> shadowTransforms;
-	shadowTransforms.push_back(shadowProj * lookAt(lightPos, lightPos + vec3(1.0, 0.0, 0.0), vec3(0.0, -1.0, 0.0)));
-	shadowTransforms.push_back(shadowProj * lookAt(lightPos, lightPos + vec3(-1.0, 0.0, 0.0), vec3(0.0, -1.0, 0.0)));
-	shadowTransforms.push_back(shadowProj * lookAt(lightPos, lightPos + vec3(0.0, 1.0, 0.0), vec3(0.0, 0.0, 1.0)));
-	shadowTransforms.push_back(shadowProj * lookAt(lightPos, lightPos + vec3(0.0, -1.0, 0.0), vec3(0.0, 0.0, -1.0)));
-	shadowTransforms.push_back(shadowProj * lookAt(lightPos, lightPos + vec3(0.0, 0.0, 1.0), vec3(0.0, -1.0, 0.0)));
-	shadowTransforms.push_back(shadowProj * lookAt(lightPos, lightPos + vec3(0.0, 0.0, -1.0), vec3(0.0, -1.0, 0.0)));
-
-	return shadowTransforms;
 }
 

@@ -67,30 +67,61 @@ void main()
     FragColor = vec4(lighting, 1.0);
 }
 
+// array of offset direction for sampling
+vec3 gridSamplingDisk[20] = vec3[]
+(
+   vec3(1, 1,  1), vec3( 1, -1,  1), vec3(-1, -1,  1), vec3(-1, 1,  1), 
+   vec3(1, 1, -1), vec3( 1, -1, -1), vec3(-1, -1, -1), vec3(-1, 1, -1),
+   vec3(1, 1,  0), vec3( 1, -1,  0), vec3(-1, -1,  0), vec3(-1, 1,  0),
+   vec3(1, 0,  1), vec3(-1,  0,  1), vec3( 1,  0, -1), vec3(-1, 0, -1),
+   vec3(0, 1,  1), vec3( 0, -1,  1), vec3( 0, -1, -1), vec3( 0, 1, -1)
+);
+
 // shadow calculation for a single light, from an array of depth cubemaps
 float ShadowCalculation(vec3 fragPos, vec3 lightPos, samplerCubeArray depthMapArray, int lightIndex) {
     // get the vector betweent the fragment position and the light positions
     vec3 lightToFrag = fragPos-lightPos;
-
-    // use the vector to sample from the depthMap
-    float closestDepth = texture(depthMapArray, vec4(lightToFrag, lightIndex)).r;
-
-    // closestDepth is in linear range [0,1] so we need to convert it to 
-    // the original depth value[0, far_plane]
-    closestDepth *= far_plane;
-
+        
     // get the current linear depth from the length between light and 
     // fragment positions
     float currentDepth = length(lightToFrag);
 
+    // use the vector to sample from the depthMap
+    //float closestDepth = texture(depthMapArray, vec4(lightToFrag, lightIndex)).r;
+
+    // closestDepth is in linear range [0,1] so we need to convert it to 
+    // the original depth value[0, far_plane]
+    //closestDepth *= far_plane;
+
     // test for shadow:
-    float bias = 0.05; // bias is larger since depth is in [near_plane, far_plane] range
+    //float bias = 0.05; // bias is larger since depth is in [near_plane, far_plane] range
     // if the currentDepth is larger (further from lightPos) than the closestDepth, then
     // the fragment is in shadow.
-    float shadow = currentDepth - bias > closestDepth ? 1.0 : 0.0;
+    //float shadow = currentDepth - bias > closestDepth ? 1.0 : 0.0;
+
+    // PCF
+    // Using the gridSamplingDisk array, we can take samples in roughly seperable
+    // directions to get a smoother shadow without sampling uneccessarily close
+    // to the original vec3 lightToFrag.
+    float shadow = 0;
+    float bias = 0.15;
+    int samples = 20;
+    float viewDistance = length(viewPos - fragPos);
+    // scale diskRadius with viewDistance, making shadows softer when far away
+    // and sharper when close
+    float diskRadius = (1 + (viewDistance / far_plane)) / 25;
+    for (int i = 0; i < samples; i++) {
+        float closestDepth = texture(depthMapArray, 
+        vec4(lightToFrag + diskRadius * gridSamplingDisk[i], lightIndex)).r;
+        closestDepth *= far_plane;
+        if (currentDepth - bias > closestDepth) {
+            shadow += 1;
+        }
+    }
+    shadow /= float(samples);
 
     // display closestDepth to visualize the depth cubemap
-    // FragColor = vec4(vec3(closestDepth/far_plane), 1.0);
+    //FragColor = vec4(vec3(closestDepth/far_plane), 1.0);
 
     return shadow;
 }
