@@ -54,7 +54,7 @@ using glm::radians;
 using glm::lookAt;
 
 // lightning start position
-const vec3 startPnt = vec3(400, 30000, 0);
+const vec3 startPnt = vec3(50, 90, 0);
 // post processing
 int amount = 0;
 float exposure = 1.0f;
@@ -90,8 +90,8 @@ GLFWwindow* CreateWindow();
 void InitImGui(GLFWwindow* window);
 // GUI
 void RenderImGui(LightManager* lm);
-void BoltControlGUI();
 void PostProcessingGUI();
+void BoltControlGUI();
 
 int main() {
 	// Initial Configurations and Window Creation
@@ -199,6 +199,7 @@ int main() {
 
 	// Shaders
 	// ---------------
+	Shader boltShader = LoadShader("bolt.vert", "bolt.frag");
 	// Deferred Shadring
 	Shader lightCubeShader = LoadShader("light.vert", "light.frag");
 	Shader geometryPassShader = LoadShader("g_buffer.vert", "g_buffer.frag");
@@ -330,6 +331,20 @@ int main() {
 
 		// -----------------------
 
+		// Render Lightning
+		boltShader.Use();
+		boltShader.SetVec3("color", vec3(1, 1, 0));
+		boltShader.SetFloat("alpha", 1.0f);
+		SetVPMatricies(boltShader, view, projection);
+		if (DYNAMIC_BOLT) {
+			// Dynamic Bolt
+			DrawLineBolt(dynamicLineSegmentsPtr);
+		}
+		else {
+			// Static Bolt
+			DrawLineBolt(staticLineSegmentsPtr);
+		}
+
 		// Render Light Cubes
 		lightCubeShader.Use();
 		SetVPMatricies(lightCubeShader, view, projection);
@@ -457,24 +472,24 @@ void ConfigureWindow() {
 }
 
 // GUI:
-std::string dynamicText = "Dynamic";
 void RenderImGui(LightManager* lm) {
 	ImGui_ImplOpenGL3_NewFrame();
 	ImGui_ImplGlfw_NewFrame();
-	ImGui::NewFrame();
-
-	//BoltControlGUI();
+	ImGui::NewFrame();;
 
 	//PostProcessingGUI();
 
 	lm->LightingGUI();
+
+	BoltControlGUI();
+	BoltGenerationGUI(methodChoice);
 
 	ImGui::Render();
 	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 }
 
 void BoltControlGUI() {
-	ImGui::Begin("Bolt Options");
+	ImGui::Begin("Bolt Control");
 	if (ImGui::Combo("Methods", &methodChoice, methodNames, 2)) {
 		SetMethod(methodChoice);
 	}
@@ -492,7 +507,6 @@ void BoltControlGUI() {
 	if (ImGui::Button("Show Light Positions")) {
 		lightBoxesEnable = !lightBoxesEnable;
 	}
-	ImGui::SliderFloat("Bolt Alpha", &boltAlpha, 0, 1);
 
 	ImGui::End();
 }

@@ -106,9 +106,9 @@ void BindBoltTexture() {
 
 vec3 ConvertWorldToScreen(vec3 pos) {
 
-	pos.x = 2 * pos.x / SCR_WIDTH - 1;
-	pos.y = 2 * pos.y / SCR_HEIGHT - 1;
-	pos.z = 2 * pos.z / SCR_WIDTH - 1;
+	//pos.x = 2 * pos.x / SCR_WIDTH - 1;
+	//pos.y = 2 * pos.y / SCR_HEIGHT - 1;
+	//pos.z = 2 * pos.z / SCR_WIDTH - 1;
 
 	return pos;
 }

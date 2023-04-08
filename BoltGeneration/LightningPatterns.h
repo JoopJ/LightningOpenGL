@@ -8,6 +8,7 @@
 
 #include <iostream>
 
+#include "../include/imgui/imgui.h"
 #include "../FunctionLibrary.h"
 #include "../include/Irrlicht/include/quaternion.h"
 
@@ -39,3 +40,6 @@ vector<pair<vec3, vec3>>* GenerateParticleSystemPattern(vec3 start, vec3 seed,
 quaternion ConvertRotationQuaternion(vec3 seed, float angle);
 pair<vec3, vec3> GetRotationAxis(vec3 seed);
 vec3 RotatePointAboutSeed(vec3 point, pair<vec3, vec3> seedPerpAxis);
+
+//  GUI
+void BoltGenerationGUI(int method);
