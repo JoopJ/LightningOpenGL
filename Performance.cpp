@@ -29,7 +29,7 @@ void Performance::Update() {
 void Performance::PerSecond() {
 	numFrames++;
 	if (currentTime - lastTime >= 1.0) {
-		std::cout << name << std::endl;
+		std::cout << std::endl << name << std::endl;
 		std::cout << "FPS: " << double(numFrames) / (currentTime - lastTime) << std::endl;
 		std::cout << "ms/Frame : " << 1000.0 / double(numFrames) << std::endl;
 		numFrames = 0;

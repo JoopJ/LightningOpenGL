@@ -20,7 +20,7 @@ using irr::core::quaternion;
 
 // Defines the number of segments in all STATIC lightning patterns
 // Also used as the central bolt size of DYNAMIC lightning patterns
-const int numSegmentsInPattern = 100;
+const int numSegmentsInPattern = 50;
 
 // Random Positions
 std::shared_ptr<vec3[numSegmentsInPattern]> GenerateRandomPositionsLightningPattern(vec3 start,

@@ -7,7 +7,7 @@ LightManager::LightManager()
 	// default values
 	lightColor = vec3(1.0f, 1.0f, 1.0f);
 	near_plane = 1;
-	far_plane = 50;
+	far_plane = 150;
 	numLights = 0;
 	attenuationChoice = 8;
 	vec3 atten = attenuationOptions[attenuationChoice];
@@ -51,7 +51,8 @@ void LightManager::SetupFBOandTexture() {
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
-void LightManager::SetLightPositions(vector<vec3> _lightPositions, int _numLights)
+// VECTOR
+void LightManager::SetLightPositions(vector<vec3>* _lightPositions, int _numLights)
 {
 	if (_numLights > MAX_POINT_LIGHTS) {
 		std::cout << "ERROR: LightManager::SetLightPositions: _numLights > MAX_POINT_LIGHTS" << std::endl;
@@ -60,7 +61,20 @@ void LightManager::SetLightPositions(vector<vec3> _lightPositions, int _numLight
 	numLights = _numLights;
 	lightPositions.clear();
 	for (int i = 0; i < numLights; i++) {
-		lightPositions.push_back(_lightPositions.at(i));
+		lightPositions.push_back(_lightPositions->at(i));
+	}
+}
+
+// ARRAY
+void LightManager::SetLightPositions(vec3* _lightPositions) {
+	if (numSegmentsInPattern > MAX_POINT_LIGHTS) {
+		std::cout << "ERROR: LightManager::SetLightPositions: _numLights > MAX_POINT_LIGHTS" << std::endl;
+		return;
+	}
+	numLights = numSegmentsInPattern;
+	lightPositions.clear();
+	for (int i = 0; i < numLights; i++) {
+		lightPositions.push_back(_lightPositions[i]);
 	}
 }
 

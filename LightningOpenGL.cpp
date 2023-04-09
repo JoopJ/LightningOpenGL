@@ -54,7 +54,7 @@ using glm::radians;
 using glm::lookAt;
 
 // lightning start position
-const vec3 startPnt = vec3(50, 90, 0);
+const vec3 startPnt = vec3(0, 90, 0);
 // post processing
 int amount = 0;
 float exposure = 1.0f;
@@ -67,7 +67,7 @@ bool shadowKeyPressed = false;
 bool bloom = true;
 bool bloomKeyPressed = false;
 // Array Type
-bool DYNAMIC_BOLT = true;
+bool DYNAMIC_BOLT = false;
 // Method Choice
 int methodChoice = 0; // 0 = random, 1 = particle system
 const char* methodNames[2] = { "Random Positions", "Particle System" };
@@ -81,6 +81,8 @@ void SetVPMatricies(Shader shader, mat4 view, mat4 projection);
 // Drawing
 void DrawLineBolt(LineBoltSegment* lboltPtr);
 void DrawLineBolt(vector<LineBoltSegment>* lboltPtr);
+void DrawLightBoxes(Shader shader, vector<vec3>* lightPositions, int numLights);
+void DrawLightBoxes(Shader shader, vec3* lightPositions, int numLights);
 // Input
 void ProcessMiscInput(GLFWwindow* window, bool* firstButtonPress);
 bool ProcessLightningControlInput(GLFWwindow* window);
@@ -154,17 +156,35 @@ int main() {
 	vector<pair<vec3, vec3>>* lightningDynamicPatternPtr = &lightningDynamicPattern;
 	// ---------------
 
+	// Shaders
+	// ---------------
+	Shader boltShader = LoadShader("bolt.vert", "bolt.frag");
+	// Deferred Shadring
+	Shader lightCubeShader = LoadShader("light.vert", "light.frag");
+	Shader geometryPassShader = LoadShader("g_buffer.vert", "g_buffer.frag");
+	Shader lightingPassShader = LoadShader("lighting_pass.vert", "lighting_pass.frag");
+	Shader depthShader = LoadShader("depth.vert", "depth.frag", "depth_multiple_cubemap.geom");
+
+	lightingPassShader.Use();
+	lightingPassShader.SetInt("gPosition", 0);
+	lightingPassShader.SetInt("gNormal", 1);
+	lightingPassShader.SetInt("gAlbedoSpec", 2);
+	lightingPassShader.SetInt("depthMapArray", 3);
+
+	lightCubeShader.Use();
+	lightCubeShader.SetVec3("lightColor", vec3(1));
+	// -------------------------
+
+	// Light Manager Setup -----
+	LightManager lightManager;
+	lightManager.Init(&depthShader);
+	// -------------------------
+
 	// Testing ---------
 	// mat4 lightRotateMat4 = glm::rotate(mat4(2.0), glm::radians(0.01f), vec3(0, 1, 0)); // used for rotating the lights
 	vector<vec3> lightPositions;
 	vec3 lightPos = vec3(0, 2, 0);
 	vec3 newPos;
-	// set light positions
-	for (int i = 0; i < 5; i++) {
-		// random variation
-		newPos = lightPos + vec3((rand() % 10) - 5, - 3 * i, (rand() % 10) - 5);
-		lightPositions.push_back(newPos);
-	}
 	// -----------------
 
 	// Bolt Objects Definition
@@ -189,38 +209,16 @@ int main() {
 		// Dynamic Bolt
 		NewBolt(dynamicLineSegmentsPtr, dynamicPointLightPositionsPtr,
 			startPnt, lightningDynamicPatternPtr);
+		lightManager.SetLightPositions(dynamicPointLightPositionsPtr, 
+			dynamicPointLightPositionsPtr->size());
 	}
 	else {
 		// Static Bolt
 		NewBolt(staticLineSegmentsPtr, staticPointLightPositionsPtr,
 			startPnt, lightningStaticPatternPtr);
+		lightManager.SetLightPositions(staticPointLightPositionsPtr);
 	}
 	// ---------------
-
-	// Shaders
-	// ---------------
-	Shader boltShader = LoadShader("bolt.vert", "bolt.frag");
-	// Deferred Shadring
-	Shader lightCubeShader = LoadShader("light.vert", "light.frag");
-	Shader geometryPassShader = LoadShader("g_buffer.vert", "g_buffer.frag");
-	Shader lightingPassShader = LoadShader("lighting_pass.vert", "lighting_pass.frag");
-	Shader depthShader = LoadShader("depth.vert", "depth.frag", "depth_multiple_cubemap.geom");
-
-	lightingPassShader.Use();
-	lightingPassShader.SetInt("gPosition", 0);
-	lightingPassShader.SetInt("gNormal", 1);
-	lightingPassShader.SetInt("gAlbedoSpec", 2);
-	lightingPassShader.SetInt("depthMapArray", 3);
-	
-	lightCubeShader.Use();
-	lightCubeShader.SetVec3("lightColor", vec3(1));
-	// -------------------------
-
-	// Light Manager Setup -----
-	LightManager lightManager;
-	lightManager.Init(&depthShader);
-	lightManager.SetLightPositions(lightPositions, lightPositions.size());
-	// -------------------------
 
 	// G-Buffer --------------
 	G_Buffer gBuffer(SCR_WIDTH, SCR_HEIGHT);
@@ -229,8 +227,8 @@ int main() {
 	// Performance Constructors
 	// -----------------
 	Performance mainLoop("Main Loop", 10.0);
-	mainLoop.SetPerSecondOutput(false);
-	mainLoop.SetAverageOutput(false);
+	mainLoop.SetPerSecondOutput(true);
+	mainLoop.SetAverageOutput(true);
 	mainLoop.Start();
 	// -----------------
 
@@ -254,34 +252,26 @@ int main() {
 		ProcessMiscInput(window, &firstMouseKeyPress);	// TODO: move GUI stuff into separate file
 		if (ProcessLightningControlInput(window)) {
 			// New Bolt
+			// Generate the pattern and set the line segment positions and point light positions
 			if (DYNAMIC_BOLT) {
 				// Dynamic Bolt
 				NewBolt(dynamicLineSegmentsPtr, dynamicPointLightPositionsPtr,
 					startPnt, lightningDynamicPatternPtr);
-			} 
+				lightManager.SetLightPositions(dynamicPointLightPositionsPtr, 
+					dynamicPointLightPositionsPtr->size());
+			}
 			else {
 				// Static Bolt
 				NewBolt(staticLineSegmentsPtr, staticPointLightPositionsPtr,
 					startPnt, lightningStaticPatternPtr);
+				lightManager.SetLightPositions(staticPointLightPositionsPtr);
 			}
 		}
-		// -----------------------
-
-		// Update Light Positions ---
-		for (int i = 0; i < lightPositions.size(); i++) {
-			vec3 pos = lightPositions[i];
-			// rotate point around y axis
-			pos = vec3(pos.x * cos(GetDeltaTime()) - pos.z * sin(GetDeltaTime()),
-								pos.y,
-								pos.x * sin(GetDeltaTime()) + pos.z * cos(GetDeltaTime()));
-			lightPositions[i] = pos;
-		}
-		lightManager.SetLightPositions(lightPositions, lightPositions.size());
 		// --------------------------
 
 		// Deferred Rendering
 		// --------------------------
-		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+		glClearColor(0.0f, 1.0f, 0.0f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 		// 1. Geometry Pass: render all geometric/color data to g-buffer
@@ -339,22 +329,26 @@ int main() {
 		if (DYNAMIC_BOLT) {
 			// Dynamic Bolt
 			DrawLineBolt(dynamicLineSegmentsPtr);
+
+			if (lightBoxesEnable) {
+				// Draw Point Light boxes
+				lightCubeShader.Use();
+				SetVPMatricies(lightCubeShader, view, projection);
+				DrawLightBoxes(lightCubeShader, dynamicPointLightPositionsPtr,
+					dynamicPointLightPositionsPtr->size());
+			}
 		}
 		else {
 			// Static Bolt
 			DrawLineBolt(staticLineSegmentsPtr);
-		}
 
-		// Render Light Cubes
-		lightCubeShader.Use();
-		SetVPMatricies(lightCubeShader, view, projection);
-		for (unsigned int i = 0; i < lightPositions.size(); i++) {
-			// For each light...
-			model = mat4(1);
-			model = glm::translate(model, lightPositions[i]);
-			model = glm::scale(model, vec3(0.5f));
-			lightCubeShader.SetMat4("model", model);
-			RenderCube();
+			if (lightBoxesEnable) {
+				// Draw Point Light boxes
+				lightCubeShader.Use();
+				SetVPMatricies(lightCubeShader, view, projection);
+				DrawLightBoxes(lightCubeShader, staticPointLightPositionsPtr,
+					numSegmentsInPattern);
+			}
 		}
 
 		// Render GUI
@@ -389,6 +383,28 @@ void DrawLineBolt(LineBoltSegment* lboltPtr) {
 void DrawLineBolt(vector<LineBoltSegment>* lboltPtr) {
 	for (int i = 0; i < lboltPtr->size(); i++) {
 		lboltPtr->at(i).Draw();
+	}
+}
+
+// Light Boxes
+// VECTOR
+void DrawLightBoxes(Shader shader, vector<vec3>* lightPositions, int numLights) {
+	for (unsigned int i = 0; i < numLights; i++) {
+		mat4 model = mat4(1);
+		model = glm::translate(model, lightPositions->at(i));
+		model = glm::scale(model, vec3(0.5f));
+		shader.SetMat4("model", model);
+		RenderCube();
+	}
+}
+// ARRAY
+void DrawLightBoxes(Shader shader, vec3* lightPositions, int numLights) {
+	for (unsigned int i = 0; i < numLights; i++) {
+		mat4 model = mat4(1);
+		model = glm::translate(model, lightPositions[i]);
+		model = glm::scale(model, vec3(0.5f));
+		shader.SetMat4("model", model);
+		RenderCube();
 	}
 }
 // ---------------

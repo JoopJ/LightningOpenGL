@@ -3,6 +3,7 @@
 // variables
 int xVariation = 4;
 int yVariation = 4;
+float multiplyer = 0.1f;
 
 float length = 1.5f;
 
@@ -110,9 +111,9 @@ glm::vec3 NextPoint(glm::vec3 point) {
 	int dy = (rand() % yVariation + 1);
 	int dz = (rand() % xVariation * 2 + 1) - xVariation;
 
-	point.x += dx;
-	point.y -= dy;
-	point.z += dz;
+	point.x += dx * multiplyer;
+	point.y -= dy * multiplyer;
+	point.z += dz * multiplyer;
 
 	return point;
 }
@@ -176,6 +177,7 @@ void BoltGenerationGUI(int method) {
 		ImGui::Text("Segment Position Variation");
 		ImGui::SliderInt("X Variation", &xVariation, 2, 10);
 		ImGui::SliderInt("Y Variation", &yVariation, 2, 10);
+		ImGui::SliderFloat("Z Variation", &multiplyer, 0.1, 2);
 		break;
 	case 1: 
 		ImGui::Text("Particle System");
