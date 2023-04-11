@@ -42,3 +42,5 @@ LightningOpenGL.vcxproj
 LightningOpenGL.vcxproj.filters
 LightningOpenGL.vcxproj.user
 
+/Textures/wall.jpg
+/imgui.ini

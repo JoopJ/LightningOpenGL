@@ -1,7 +1,7 @@
 #include "CameraControl.h"
 
 // camera settings
-glm::vec3 cameraPos = glm::vec3(-30.0f, 15.0f, 0.0f);
+glm::vec3 cameraPos = glm::vec3(-19.0f, 15.0f, 0.0f);
 glm::vec3 cameraFront = glm::vec3(1.0f, 0.0f, 0.0f);
 glm::vec3 cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);
 
@@ -12,7 +12,7 @@ float lastY = SCR_HEIGHT / 2.0f;
 float fov = 90;
 
 bool firstMouse = true;
-bool mouseEngaged = false;
+bool mouseEngaged = true;
 
 // time
 float deltaTime = 0.0f;
@@ -77,6 +77,9 @@ void ProcessKeyboardInput(GLFWwindow* window) {
 
 	// directional control, based on camera's front and up vectors
 	float cameraSpeed = static_cast<float>(9.5 * deltaTime);
+	if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS)
+		cameraSpeed = static_cast<float>(19.5 * deltaTime);
+
 	if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
 		cameraPos += cameraSpeed * cameraFront;
 	if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)

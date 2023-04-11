@@ -10,6 +10,7 @@ using glm::vec3;
 
 void RenderScene(const Shader& shader);
 
+// Basics
 void RenderQuad();
 void RenderCube();
 void RenderFloor();

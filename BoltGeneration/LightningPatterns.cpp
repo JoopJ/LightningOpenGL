@@ -1,8 +1,11 @@
 #include "LightningPatterns.h"
 
 // variables
-int xVariation = 450;
-int yVariation = 425;
+int xVariation = 4;
+int yVariation = 4;
+float multiplyer = 0.1f;
+
+float length = 1.5f;
 
 // Pattern Generation Functions
 // -------------------------
@@ -39,7 +42,6 @@ vector<pair<vec3, vec3>>* GenerateRandomPositionsLightningPattern(vec3 start,
 std::shared_ptr<vec3[numSegmentsInPattern]> GenerateParticleSystemPattern(vec3 start, vec3 seed,
 	std::shared_ptr<vec3[numSegmentsInPattern]> patternPtr) {
 
-	float length = 4;
 	seed = normalize(seed);
 	// get the axis to rotate around
 	pair<vec3, vec3> seedPerpAxis = GetRotationAxis(seed);
@@ -73,7 +75,6 @@ vector<pair<vec3, vec3>>* GenerateParticleSystemPattern(vec3 start, vec3 seed,
 	// clear the pattern
 	patternPtr->clear();
 
-	float length = 4; // TODO random length for each segment
 	seed = normalize(seed);
 	// get the axis to rotate around
 	pair<vec3, vec3> seedPerpAxis = GetRotationAxis(seed);
@@ -110,9 +111,9 @@ glm::vec3 NextPoint(glm::vec3 point) {
 	int dy = (rand() % yVariation + 1);
 	int dz = (rand() % xVariation * 2 + 1) - xVariation;
 
-	point.x += dx;
-	point.y -= dy;
-	point.z += dz;
+	point.x += dx * multiplyer;
+	point.y -= dy * multiplyer;
+	point.z += dz * multiplyer;
 
 	return point;
 }
@@ -163,3 +164,30 @@ vec3 RotatePointAboutSeed(vec3 point, pair<vec3, vec3> seedPerpAxis) {
 	return newPoint;
 }
 // -----------------------
+
+// GUI
+// method: 0 - Random, 1 - Particle, 2 - L-System
+void BoltGenerationGUI(int method) {
+	ImGui::Begin("Bolt Generation");
+	ImGui::Text("Bolt Generation");
+	ImGui::Separator();
+	switch (method) {
+	case 0:
+		ImGui::Text("Random");
+		ImGui::Text("Segment Position Variation");
+		ImGui::SliderInt("X Variation", &xVariation, 2, 10);
+		ImGui::SliderInt("Y Variation", &yVariation, 2, 10);
+		ImGui::SliderFloat("Z Variation", &multiplyer, 0.1, 2);
+		break;
+	case 1: 
+		ImGui::Text("Particle System");
+		ImGui::Text("Segment Length");
+		ImGui::SliderFloat("Length", &length, 0.1f, 2.0f);
+		break;
+	case 2:
+		ImGui::Text("L-System");
+		break;
+	}
+	ImGui::Separator();
+	ImGui::End();
+}

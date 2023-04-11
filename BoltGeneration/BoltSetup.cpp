@@ -24,6 +24,7 @@ int currentMethod = 0;
 // Variables
 int lightPerSeg = 1;
 vec3 particleSystemSeedSegment;
+int numActiveLights;
 // --------------------
 
 // BoltSegment Setup
@@ -61,6 +62,7 @@ void PositionBoltPointLights(vec3* lightPositionsPtr,
 			lighPosIndex++;
 		}
 	}
+	numActiveLights = lighPosIndex;
 }
 
 // DYNAMIC BOLT
@@ -68,11 +70,13 @@ void PositionBoltPointLights(vector<vec3>* lightPositionsPtr,
 	vector<pair<vec3, vec3>>* lightningPatternPtr) {
 	// remove old light positions
 	lightPositionsPtr->clear();
+	numActiveLights = 0;
 
 	for (int seg = 0; seg < lightningPatternPtr->size(); seg++) {
 		vec3 segDir = (lightningPatternPtr->at(seg).second - lightningPatternPtr->at(seg).first) / (float)lightPerSeg;
 		for (int light = 0; light < lightPerSeg; light++) {
 			lightPositionsPtr->push_back(lightningPatternPtr->at(seg).first + segDir * (float)light);
+			numActiveLights++;
 		}
 	}
 }
