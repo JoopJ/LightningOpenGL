@@ -134,20 +134,33 @@ void LightManager::UpdateShadowProjection() {
 	shadowProj = glm::perspective(glm::radians(90.0f), aspect, near_plane, far_plane);
 }
 
-void LightManager::LightingGUI() {
+void LightManager::LightingGUI(bool* lightBoxesEnable) {
 	ImGui::Begin("Lighting");
 
-	ImGui::Text("Attenuation");
-	ImGui::Text("Radius: %d", attenuationRadius);
-	if (ImGui::SliderInt("##", &attenuationChoice, 0, 11)) {
-		vec3 atten = attenuationOptions[attenuationChoice];
-		attenuationRadius = atten.x;
-		linear = atten.y;
-		quadratic = atten.z;
+	if (ImGui::CollapsingHeader("Shadows")) {
+		ImGui::Text("Far Plane: %f", far_plane);
+		ImGui::SliderFloat("###", &far_plane, 1, 200);
 	}
 
-	ImGui::Text("Near Plane: %f", far_plane);
-	ImGui::SliderFloat("###", &far_plane, 1, 200);
+	if (ImGui::CollapsingHeader("Light")) {
+
+		ImGui::Text("Attenuation");
+		ImGui::Text("Radius: %d", attenuationRadius);
+		if (ImGui::SliderInt("##", &attenuationChoice, 0, 11)) {
+			vec3 atten = attenuationOptions[attenuationChoice];
+			attenuationRadius = atten.x;
+			linear = atten.y;
+			quadratic = atten.z;
+		}
+
+		ImGui::Text("Light Color");
+		ImGui::ColorEdit3("##", (float*)&lightColor);
+
+		ImGui::Text("Point Lights");
+		if (ImGui::Button("Show Light Positions")) {
+			*lightBoxesEnable = !*lightBoxesEnable;
+		}
+	}
 
 	ImGui::End();
 }

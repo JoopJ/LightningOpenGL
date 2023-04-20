@@ -25,7 +25,7 @@ public:
 	void RenderDepthMaps();
 	void BindCubeMapArray();
 	void SetLightingPassUniforms(Shader* shader);
-	void LightingGUI();
+	void LightingGUI(bool* lightBoxesEnable);
 
 private:
 	// Variables ---------

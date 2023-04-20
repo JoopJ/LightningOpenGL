@@ -6,21 +6,29 @@ in vec2 TexCoords;
 
 uniform sampler2D screenTexture;
 uniform sampler2D bloomTexture;
-uniform bool bloom;
+
 uniform float exposure;
+uniform float gamma;
+
+uniform bool bloomEnabled;
+uniform bool gammaEnabled;
+uniform bool exposureEnabled;
 
 void main() {
-    const float gamma = 2.2;
     vec3 color = texture(screenTexture, TexCoords).rgb;
     vec3 bloomColor = texture(bloomTexture, TexCoords).rgb;
-    if (bloom)
+    if (bloomEnabled)
         color += bloomColor; // additive blending
 
+    vec3 result;
 
-    // reinhard tone mapping
-    vec3 result = vec3(1.0) - exp(-color * exposure);
-    // gamme corretion
-    result = pow(result, vec3(1.0 / gamma));
+    if (exposureEnabled)    // reinhard tone mapping
+		result = vec3(1.0) - exp(-color * exposure);
+	else
+		result = color;
+
+    if (gammaEnabled)     // gamme corretion
+        result = pow(result, vec3(1.0 / gamma));
 
     FragColor = vec4(result, 1.0);
 }

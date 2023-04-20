@@ -6,16 +6,20 @@
 class Performance {
 	void PerSecond();
 	void Avg();
+
 	// Performance Options
 	const char* name = "Undefined";
 	double avgTime;	// time to take average
 	double currentTime;
+
 	// Options of what to output
 	bool outputPerSecond = true;
 	bool outputAverage = true;
+
 	// Per second variables
 	double lastTime;
 	int numFrames = 0;
+
 	// Avr variables
 	double lastTimeAvg;
 	int numFramesAvg = 0;

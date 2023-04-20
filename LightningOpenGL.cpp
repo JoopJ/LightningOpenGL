@@ -43,6 +43,7 @@ ImGui is used for the GUI which allows editting of various variables used to gen
 #include "Managers/LightManager.h"
 #include "Managers/G_Buffer.h"
 #include "Managers/FboManager.h"
+#include "Managers/PerformanceManager.h"
 #include "FunctionLibrary.h"
 #include "CameraControl.h"
 #include "Renderer.h"
@@ -60,6 +61,7 @@ const vec3 startPnt = vec3(0, 90, 0);
 // post processing
 int amount = 10;
 float exposure = 1.0f;
+float gamma = 2.2f;
 
 // lightning options
 float boltAlpha = 1.0f;
@@ -71,6 +73,8 @@ bool shadowsEnabled = true;
 bool shadowKeyPressed = false;
 bool bloom = true;
 bool bloomKeyPressed = false;
+bool gammaCorrectionEnabled = true;
+bool exposureEnabled = true;
 
 // Array Type
 bool DYNAMIC_BOLT = false;
@@ -99,9 +103,9 @@ void ConfigureWindow();
 GLFWwindow* CreateWindow();
 void InitImGui(GLFWwindow* window);
 // GUI
-void RenderImGui(LightManager* lm);
+void RenderImGui(LightManager* lm, PerformanceManager* pm);
 void PostProcessingGUI();
-void BoltControlGUI();
+void BoltControlGUI(PerformanceManager* pm);
 
 
 
@@ -204,6 +208,18 @@ int main() {
 	lightManager.Init(&depthShader);
 	// -------------------------
 
+	// Performance Manager Setup
+	PerformanceManager performanceManager;
+	// -------------------------
+
+	// Performance Constructors
+	// -----------------
+	Performance mainLoop("Main Loop", 10.0);
+	mainLoop.SetPerSecondOutput(false);
+	mainLoop.SetAverageOutput(true);
+	mainLoop.Start();
+	// -----------------
+
 	// Testing ---------
 	// mat4 lightRotateMat4 = glm::rotate(mat4(2.0), glm::radians(0.01f), vec3(0, 1, 0)); // used for rotating the lights
 	vector<vec3> lightPositions;
@@ -252,14 +268,6 @@ int main() {
 	FboManager fboManager(SCR_WIDTH, SCR_HEIGHT);
 	// ----------------
 
-	// Performance Constructors
-	// -----------------
-	Performance mainLoop("Main Loop", 100.0);
-	mainLoop.SetPerSecondOutput(false);
-	mainLoop.SetAverageOutput(true);
-	mainLoop.Start();
-	// -----------------
-
 	// render loop
 	while (!glfwWindowShouldClose(window)) {
 		// pre-frame time logic
@@ -272,6 +280,9 @@ int main() {
 		// Performance
 		// -----------------------
 		mainLoop.Update();
+
+		performanceManager.DynamicPatternInfo(lightningDynamicPatternPtr);
+		performanceManager.StaticPatternInfo(lightningStaticPatternPtr);
 		// -----------------------
 
 		// input
@@ -395,13 +406,16 @@ int main() {
 
 		screenShader.Use();
 		fboManager.BindSceneAndBloom();
-		screenShader.SetBool("bloom", bloom);
+		screenShader.SetBool("bloomEnabled", bloom);
+		screenShader.SetBool("gammaEnabled", gammaCorrectionEnabled);
 		screenShader.SetFloat("exposure", exposure);
+		screenShader.SetBool("exposureEnabled", exposureEnabled);
+		screenShader.SetFloat("gamma", gamma);
 		RenderQuad();
 
 		// 6. GUI
 		// -----------------
-		RenderImGui(&lightManager);
+		RenderImGui(&lightManager, &performanceManager);
 		// --------------------------
 
 		// glfw: swap buffers and poll IO events
@@ -510,7 +524,7 @@ bool spaceHeld = false;
 // ProcessLightningControlInput, process inputs relating to control of the lightning.
 // returns true when a new strike is initiated, false otherwise.
 bool ProcessLightningControlInput(GLFWwindow* window) {
-	// recalculate lines	TODO: method choices should choose between lines and tbolts
+	// recalculate lines
 	if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS && !spaceHeld) {
 		// std::cout << "New Strike" << std::endl;
 		spaceHeld = true;
@@ -535,41 +549,72 @@ void ConfigureWindow() {
 	glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GL_TRUE);
 }
 
+// Window Toggles
+bool toggleBoltGenWindow = false;
+bool toggleLightingWindow = false;
+bool togglePostProcessingWindow = false;
+bool toggleSceneWindow = false;
+bool toggleBoltControlWindow = false;
 // GUI:
-void RenderImGui(LightManager* lm) {
+void RenderImGui(LightManager* lm, PerformanceManager* pm) {
 	ImGui_ImplOpenGL3_NewFrame();
 	ImGui_ImplGlfw_NewFrame();
 	ImGui::NewFrame();;
 
-	PostProcessingGUI();
+	// Window Toggle Menu
+	ImGui::Begin("Window Menu");
+	if (ImGui::Button("Bolt Generation")) {
+		toggleBoltGenWindow = !toggleBoltGenWindow;
+	}
+	if (ImGui::Button("Lighting")) {
+		toggleLightingWindow = !toggleLightingWindow;
+	}
+	if (ImGui::Button("Post Processing")) {
+		togglePostProcessingWindow = !togglePostProcessingWindow;
+	}
+	if (ImGui::Button("Bolt Control")) {
+		toggleBoltControlWindow = !toggleBoltControlWindow;
+	}
+	if (ImGui::Button("Scene")) {
+		toggleSceneWindow = !toggleSceneWindow;
+	}
+	ImGui::End();
 
-	lm->LightingGUI();
 
-	BoltControlGUI();
-	BoltGenerationGUI(methodChoice);
+	if (toggleBoltGenWindow)
+		BoltGenerationGUI(methodChoice);
+
+	if (toggleLightingWindow)
+		lm->LightingGUI(&lightBoxesEnable);
+
+	if (togglePostProcessingWindow)
+		PostProcessingGUI();
+
+	if (toggleBoltControlWindow)
+		BoltControlGUI(pm);
 
 	ImGui::Render();
 	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 }
 
-void BoltControlGUI() {
+void BoltControlGUI(PerformanceManager* pm) {
 	ImGui::Begin("Bolt Control");
-	if (ImGui::Combo("Methods", &methodChoice, methodNames, 2)) {
+
+	ImGui::Text("Methods:");
+	if (ImGui::Combo("##", &methodChoice, methodNames, 2)) {
 		SetMethod(methodChoice);
 	}
 
+	ImGui::Text("Storage Type:");
 	if (ImGui::Button(DYNAMIC_BOLT ? "Dynamic" : "Static")) {
 		DYNAMIC_BOLT = !DYNAMIC_BOLT;
 	}
+	ImGui::Text("Pattern Info:");
 	if (DYNAMIC_BOLT) {
-		ImGui::Text("DYNAMIC INFO HERE");
+		pm->DynamicPatternGUI();
 	}
 	else {
-		ImGui::Text("STATIC INFO HERE");
-	}
-
-	if (ImGui::Button("Show Light Positions")) {
-		lightBoxesEnable = !lightBoxesEnable;
+		pm->StaticPatternGUI();
 	}
 
 	ImGui::End();
@@ -577,8 +622,25 @@ void BoltControlGUI() {
 
 void PostProcessingGUI() {
 	ImGui::Begin("Post Processing");
-	ImGui::SliderInt("Blur Amount", &amount, 0, 15);
-	ImGui::SliderFloat("Exposure", &exposure, 0.1f, 100);
+
+	if (ImGui::CollapsingHeader("Bloom")) {
+		ImGui::Checkbox("Enabled", &bloom);
+		ImGui::Text("Amount:");
+		ImGui::SliderInt("", &amount, 0, 15);
+	}
+
+	if (ImGui::CollapsingHeader("Gamma Correction")) {
+		ImGui::Checkbox("Enabled", &gammaCorrectionEnabled);
+		ImGui::Text("Gamma:");
+		ImGui::SliderFloat("##", &gamma, 0.1f, 5.0f);
+	}
+
+	if (ImGui::CollapsingHeader("Exposre")) {
+		ImGui::Checkbox("Enabled##", &exposureEnabled);
+		ImGui::Text("Exposure:");
+		ImGui::SliderFloat("###", &exposure, 0.1f, 100);
+	}
+	
 	ImGui::End();
 }
 
