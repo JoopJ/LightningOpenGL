@@ -46,7 +46,6 @@ G_Buffer::G_Buffer(unsigned int width, unsigned int height)
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
-// Public Methods
 void G_Buffer::Bind()
 {
 	glBindFramebuffer(GL_FRAMEBUFFER, gBuffer);

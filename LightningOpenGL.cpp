@@ -42,6 +42,7 @@ ImGui is used for the GUI which allows editting of various variables used to gen
 #include "Shader/ShaderSetup.h"
 #include "Managers/LightManager.h"
 #include "Managers/G_Buffer.h"
+#include "Managers/FboManager.h"
 #include "FunctionLibrary.h"
 #include "CameraControl.h"
 #include "Renderer.h"
@@ -243,69 +244,12 @@ int main() {
 	}
 	// ---------------
 
-	// G-Buffer --------------
+	// G-Buffer -------
 	G_Buffer gBuffer(SCR_WIDTH, SCR_HEIGHT);
-	// tempFBO
-	// used to sture a copy of the gBuffer's 
-	// -----------------
+	// ----------------
 
-	// Postprocessing
-	// ---------------
-	// framebuffer object
-	// stores the scene in tcbo[0] and the bloom in tcbo[1], they are blended together in 4.5.
-	unsigned int fbo;
-	glGenFramebuffers(1, &fbo);
-	glBindFramebuffer(GL_FRAMEBUFFER, fbo);
-
-	// texture color buffer objects
-	unsigned int tcbo[2];
-	// genereate and attach to framebuffer object (fbo)
-	glGenTextures(2, tcbo);
-	for (unsigned int i = 0; i < 2; i++) {
-		glBindTexture(GL_TEXTURE_2D, tcbo[i]);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, SCR_WIDTH, SCR_HEIGHT, 0, GL_RGBA, GL_FLOAT, NULL);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + i, GL_TEXTURE_2D, tcbo[i], 0);
-	}
-
-	// depth and stencil buffer object
-	unsigned int rbo; // can be a renderbuffer object as we don't need to sample from it
-	glGenRenderbuffers(1, &rbo);
-	glBindRenderbuffer(GL_RENDERBUFFER, rbo);
-	// allocate storage and unbind
-	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, SCR_WIDTH, SCR_HEIGHT);
-	glBindRenderbuffer(GL_RENDERBUFFER, 0);
-	// attach to the framebuffer object (fbo)
-	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, rbo);
-	// tell opengl which color attachments to use for rendering (of this framebuffer, fbo)
-	unsigned int attachments[2] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
-	glDrawBuffers(2, attachments);
-
-	// check fbo is complete
-	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
-		std::cout << "ERROR::FRAMEBUFFER:: Framebuffer is not complete!" << std::endl;
-	}
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
-	// ping pong buffers
-	unsigned int pingpongFBO[2];
-	unsigned int pingpongBuffer[2];
-	glGenFramebuffers(2, pingpongFBO);
-	glGenTextures(2, pingpongBuffer);
-
-	for (unsigned int i = 0; i < 2; i++) {
-		glBindFramebuffer(GL_FRAMEBUFFER, pingpongFBO[i]);
-		glBindTexture(GL_TEXTURE_2D, pingpongBuffer[i]);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, SCR_WIDTH, SCR_HEIGHT, 0, GL_RGBA, GL_FLOAT, NULL);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, pingpongBuffer[i], 0);
-	}
+	// FBO ------------
+	FboManager fboManager(SCR_WIDTH, SCR_HEIGHT);
 	// ----------------
 
 	// Performance Constructors
@@ -360,7 +304,7 @@ int main() {
 
 		// Rendering
 		// --------------------------
-		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+		glClearColor(0.5f, 0.5f, 0.5f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 		// 1. Geometry Pass: render all geometric/color data to g-buffer
@@ -386,7 +330,7 @@ int main() {
 		//					 pixel-by-pixel using the g-buffer's content.
 		// -----------------
 		glViewport(0, 0, SCR_WIDTH, SCR_HEIGHT);
-		glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+		fboManager.Bind();
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 		lightingPassShader.Use();
 
@@ -402,7 +346,7 @@ int main() {
 		// 2.5. copy contents of geometry buffer to fbo
 		// -----------------
 		gBuffer.BindRead();
-		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, fbo);
+		fboManager.BindDraw();
 		glBlitFramebuffer(0, 0, SCR_WIDTH, SCR_HEIGHT, 0, 0, SCR_WIDTH, SCR_HEIGHT,
 			GL_DEPTH_BUFFER_BIT, GL_NEAREST);
 
@@ -440,41 +384,22 @@ int main() {
 			}
 		}
 
-		// 4. Blur Lightning
+		// 4. Bloom
 		// -----------------
-		bool horizontal = true, first_iteration = true;
-		blurShader.Use();
-		for (int i = 0; i < amount; i++)
-		{
-			glBindFramebuffer(GL_FRAMEBUFFER, pingpongFBO[horizontal]);
-			blurShader.SetInt("horizontal", horizontal);
-			// bind texutre of other framebuffer, or the texture to blur if first iteration
-			glBindTexture(GL_TEXTURE_2D, first_iteration ? tcbo[1] : pingpongBuffer[!horizontal]);
-			// render quad
-			RenderQuad();
-			// swap buffers
-			horizontal = !horizontal;
-			if (first_iteration) {
-				first_iteration = false;
-			}
-		}
+		bool horizontal = fboManager.ApplyBloom(blurShader, amount);
 
-		// 4.5. Blend Scene and Blurred Bolt to default framebuffer
+		// 5. Blend Scene and Blurred Bolt to default framebuffer
 		// -----------------
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
 		glClear(GL_COLOR_BUFFER_BIT);
-		//glDisable(GL_DEPTH_TEST);
 
 		screenShader.Use();
-		glActiveTexture(GL_TEXTURE0);
-		glBindTexture(GL_TEXTURE_2D, tcbo[0]);	// Scene
-		glActiveTexture(GL_TEXTURE1);
-		glBindTexture(GL_TEXTURE_2D, pingpongBuffer[!horizontal]); // Blurred Bolt
-		screenShader.SetInt("bloom", bloom);
+		fboManager.BindSceneAndBloom();
+		screenShader.SetBool("bloom", bloom);
 		screenShader.SetFloat("exposure", exposure);
 		RenderQuad();
 
-		// 5. GUI
+		// 6. GUI
 		// -----------------
 		RenderImGui(&lightManager);
 		// --------------------------
