@@ -25,12 +25,7 @@ V - Toggle Shadows
 
 Esc - Exit
 
-## GUI
-Methods: changes the method used to render the lightning bolt
-
-Line - uses colored Line primitives
-
-Triangle Color - uses coloured triangle primitives
+GUI - gui windows can be toggled throug the Window Menu by pressing the buttons.
 
 ### TODO:
 	
