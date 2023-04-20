@@ -1,6 +1,7 @@
 #version 460 core
 
-out vec4 FragColor;
+layout (location = 0) out vec4 FragColor;
+layout (location = 1) out vec4 BlurColor;
   
 in vec2 TexCoords;
 
@@ -15,7 +16,8 @@ uniform vec3 lightPositions[MAX_NUM_LIGHTS];    // light positions and depth cub
 uniform vec3 viewPos;
 uniform float far_plane;
 uniform int numLightsActive;
-uniform bool shadows;   // Toggle shadows
+uniform bool shadows;           // Toggle shadows
+uniform bool bloomEnabled;      // Toggle drawing to blur buffer
 
 // attenuation and color parameters are constatnt for all lights 
 uniform float Linear;
@@ -64,6 +66,17 @@ void main()
     // FragColor = vec4(Normal, 1.0); // visualize normals
     // FragColor = vec4(Diffuse, 1.0); // visualize diffuse
     lighting = lighting / float(numLightsActive); // average the light colors
+    
+    // Bloom
+    // check whether lighting is higher than some threshhold. If so, draw to blur buffer (tcbo[1])
+    if (bloomEnabled) {
+        float brightness = dot(lighting, vec3(0.2126, 0.7152, 0.0722));
+        if (brightness > 1.0) {
+			BlurColor = vec4(lighting, 1.0);
+		} else {
+			BlurColor = vec4(0.0, 0.0, 0.0, 1.0);
+		}
+    }
     FragColor = vec4(lighting, 1.0);
 }
 

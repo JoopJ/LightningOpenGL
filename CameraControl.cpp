@@ -1,11 +1,11 @@
 #include "CameraControl.h"
 
 // camera settings
-glm::vec3 cameraPos = glm::vec3(-19.0f, 15.0f, 0.0f);
-glm::vec3 cameraFront = glm::vec3(1.0f, 0.0f, 0.0f);
+glm::vec3 cameraPos = glm::vec3(19.0f, 15.0f, 0.0f);
+glm::vec3 cameraFront = glm::vec3(-1.0f, 0.0f, 0.0f);
 glm::vec3 cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);
 
-float yaw = -90.0f;
+float yaw = 180.0f;
 float pitch = 0.0f;
 float lastX = SCR_WIDTH / 2.0f;
 float lastY = SCR_HEIGHT / 2.0f;

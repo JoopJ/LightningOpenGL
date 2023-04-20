@@ -98,8 +98,6 @@ void LightManager::RenderDepthMaps() {
 		depthShader->SetVec3("lightPos", lightPositions[light]);
 		RenderScene(*depthShader);
 	}
-
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
 void LightManager::BindCubeMapArray() {

@@ -55,22 +55,29 @@ using glm::lookAt;
 
 // lightning start position
 const vec3 startPnt = vec3(0, 90, 0);
+
 // post processing
-int amount = 0;
+int amount = 10;
 float exposure = 1.0f;
+
 // lightning options
 float boltAlpha = 1.0f;
-vec3 boltColor = vec3(1.0f, 1.0f, 0.0f);
+vec3 boltColor = vec3(1.0f, 1.0f, 0.0f);	// Yellow
+vec3 cubeLightColor = vec3(1);				// White
+
 // toggles
 bool shadowsEnabled = true;
 bool shadowKeyPressed = false;
 bool bloom = true;
 bool bloomKeyPressed = false;
+
 // Array Type
 bool DYNAMIC_BOLT = false;
+
 // Method Choice
 int methodChoice = 0; // 0 = random, 1 = particle system
 const char* methodNames[2] = { "Random Positions", "Particle System" };
+
 // Debuging
 bool lightBoxesEnable = false;
 
@@ -95,6 +102,8 @@ void RenderImGui(LightManager* lm);
 void PostProcessingGUI();
 void BoltControlGUI();
 
+
+
 int main() {
 	// Initial Configurations and Window Creation
 	// -------------------------
@@ -106,17 +115,19 @@ int main() {
 		return -1;
 	}
 	InitImGui(window);
+
 	// Global OpenGL state
 	glEnable(GL_DEPTH_TEST);
 	glEnable(GL_CULL_FACE);
 	// -------------------------
+
 	// Load Textures
-	// ---------------
+	// -------------------------
 	unsigned int metalWallTexture = LoadTexture("\\Textures\\metal_wall.png");
-	// ---------------
+	// -------------------------
 
 	// Input
-	// ---------------
+	// -------------------------
 	// callbacks
 	glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
 	glfwSetCursorPosCallback(window, mouse_callback);
@@ -124,10 +135,10 @@ int main() {
 	// mouse capture
 	glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 	bool firstMouseKeyPress = true;
-	// ---------------
+	// -------------------------
 
 	// Bolt Objects Setup
-	// ---------------
+	// -------------------------
 	// Line Segments
 	// static
 	LineBoltSegment boltLinesStatic[numSegmentsInPattern+1];
@@ -154,25 +165,37 @@ int main() {
 	// dynamic
 	vector<pair<vec3, vec3>> lightningDynamicPattern;
 	vector<pair<vec3, vec3>>* lightningDynamicPatternPtr = &lightningDynamicPattern;
-	// ---------------
+	// -------------------------
 
 	// Shaders
-	// ---------------
+	// -------------------------
+	// Bolt
 	Shader boltShader = LoadShader("bolt.vert", "bolt.frag");
+	// Post Processing
+	Shader blurShader = LoadShader("blur.vert", "blur.frag");
+	Shader screenShader = LoadShader("screen.vert", "screen.frag");
 	// Deferred Shadring
 	Shader lightCubeShader = LoadShader("light.vert", "light.frag");
 	Shader geometryPassShader = LoadShader("g_buffer.vert", "g_buffer.frag");
 	Shader lightingPassShader = LoadShader("lighting_pass.vert", "lighting_pass.frag");
 	Shader depthShader = LoadShader("depth.vert", "depth.frag", "depth_multiple_cubemap.geom");
 
+	// Shader Setup
 	lightingPassShader.Use();
 	lightingPassShader.SetInt("gPosition", 0);
 	lightingPassShader.SetInt("gNormal", 1);
 	lightingPassShader.SetInt("gAlbedoSpec", 2);
 	lightingPassShader.SetInt("depthMapArray", 3);
 
+	blurShader.Use();
+	blurShader.SetInt("image", 3);
+
 	lightCubeShader.Use();
-	lightCubeShader.SetVec3("lightColor", vec3(1));
+	lightCubeShader.SetVec3("lightColor", cubeLightColor);
+
+	screenShader.Use();
+	screenShader.SetInt("sceneTexture", 0);
+	screenShader.SetInt("bloomTexture", 1);
 	// -------------------------
 
 	// Light Manager Setup -----
@@ -183,7 +206,7 @@ int main() {
 	// Testing ---------
 	// mat4 lightRotateMat4 = glm::rotate(mat4(2.0), glm::radians(0.01f), vec3(0, 1, 0)); // used for rotating the lights
 	vector<vec3> lightPositions;
-	vec3 lightPos = vec3(0, 2, 0);
+	vec3 lightPos = vec3(0, 10, 0);
 	vec3 newPos;
 	// -----------------
 
@@ -222,12 +245,73 @@ int main() {
 
 	// G-Buffer --------------
 	G_Buffer gBuffer(SCR_WIDTH, SCR_HEIGHT);
+	// tempFBO
+	// used to sture a copy of the gBuffer's 
 	// -----------------
+
+	// Postprocessing
+	// ---------------
+	// framebuffer object
+	// stores the scene in tcbo[0] and the bloom in tcbo[1], they are blended together in 4.5.
+	unsigned int fbo;
+	glGenFramebuffers(1, &fbo);
+	glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+
+	// texture color buffer objects
+	unsigned int tcbo[2];
+	// genereate and attach to framebuffer object (fbo)
+	glGenTextures(2, tcbo);
+	for (unsigned int i = 0; i < 2; i++) {
+		glBindTexture(GL_TEXTURE_2D, tcbo[i]);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, SCR_WIDTH, SCR_HEIGHT, 0, GL_RGBA, GL_FLOAT, NULL);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + i, GL_TEXTURE_2D, tcbo[i], 0);
+	}
+
+	// depth and stencil buffer object
+	unsigned int rbo; // can be a renderbuffer object as we don't need to sample from it
+	glGenRenderbuffers(1, &rbo);
+	glBindRenderbuffer(GL_RENDERBUFFER, rbo);
+	// allocate storage and unbind
+	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, SCR_WIDTH, SCR_HEIGHT);
+	glBindRenderbuffer(GL_RENDERBUFFER, 0);
+	// attach to the framebuffer object (fbo)
+	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, rbo);
+	// tell opengl which color attachments to use for rendering (of this framebuffer, fbo)
+	unsigned int attachments[2] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
+	glDrawBuffers(2, attachments);
+
+	// check fbo is complete
+	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+		std::cout << "ERROR::FRAMEBUFFER:: Framebuffer is not complete!" << std::endl;
+	}
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+	// ping pong buffers
+	unsigned int pingpongFBO[2];
+	unsigned int pingpongBuffer[2];
+	glGenFramebuffers(2, pingpongFBO);
+	glGenTextures(2, pingpongBuffer);
+
+	for (unsigned int i = 0; i < 2; i++) {
+		glBindFramebuffer(GL_FRAMEBUFFER, pingpongFBO[i]);
+		glBindTexture(GL_TEXTURE_2D, pingpongBuffer[i]);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, SCR_WIDTH, SCR_HEIGHT, 0, GL_RGBA, GL_FLOAT, NULL);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, pingpongBuffer[i], 0);
+	}
+	// ----------------
 
 	// Performance Constructors
 	// -----------------
-	Performance mainLoop("Main Loop", 10.0);
-	mainLoop.SetPerSecondOutput(true);
+	Performance mainLoop("Main Loop", 100.0);
+	mainLoop.SetPerSecondOutput(false);
 	mainLoop.SetAverageOutput(true);
 	mainLoop.Start();
 	// -----------------
@@ -249,7 +333,7 @@ int main() {
 		// input
 		// -----------------------
 		ProcessKeyboardInput(window);
-		ProcessMiscInput(window, &firstMouseKeyPress);	// TODO: move GUI stuff into separate file
+		ProcessMiscInput(window, &firstMouseKeyPress);
 		if (ProcessLightningControlInput(window)) {
 			// New Bolt
 			// Generate the pattern and set the line segment positions and point light positions
@@ -269,19 +353,20 @@ int main() {
 		}
 		// --------------------------
 
-		// Deferred Rendering
-		// --------------------------
-		glClearColor(0.0f, 1.0f, 0.0f, 1.0f);
-		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-		// 1. Geometry Pass: render all geometric/color data to g-buffer
-		// ---------------
-		gBuffer.Bind();
-		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
+		// MVP
 		mat4 model = mat4(1.0f);
 		mat4 view = lookAt(GetCameraPos(), GetCameraPos() + GetCameraFront(), GetCameraUp());
 		mat4 projection = glm::perspective(glm::radians(GetFOV()), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.0f);
+
+		// Rendering
+		// --------------------------
+		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+		// 1. Geometry Pass: render all geometric/color data to g-buffer
+		// -----------------
+		gBuffer.Bind();
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 		geometryPassShader.Use();
 		SetVPMatricies(geometryPassShader, view, projection);
@@ -294,12 +379,14 @@ int main() {
 
 		// Generate Shadow Maps
 		lightManager.RenderDepthMaps();
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
 
 		// 2. Lighting Pass: calculate lighting by iterating over a screen filled quad 
 		//					 pixel-by-pixel using the g-buffer's content.
 		// -----------------
 		glViewport(0, 0, SCR_WIDTH, SCR_HEIGHT);
+		glBindFramebuffer(GL_FRAMEBUFFER, fbo);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 		lightingPassShader.Use();
 
@@ -309,22 +396,24 @@ int main() {
 		lightManager.SetLightingPassUniforms(&lightingPassShader);
 		lightingPassShader.SetVec3("viewPos", GetCameraPos());
 		lightingPassShader.SetBool("shadows", shadowsEnabled);
+		lightingPassShader.SetBool("blurEnabled", bloom);
 		RenderQuad();
 
-		// 2.5 copy contents of geometry's depth buffer to default framebuffer's depth buffer
+		// 2.5. copy contents of geometry buffer to fbo
 		// -----------------
 		gBuffer.BindRead();
-		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0); // write to default framebuffer
-		// blit to default framebuffer.
-		glBlitFramebuffer(0, 0, SCR_WIDTH, SCR_HEIGHT, 0, 0, SCR_WIDTH, SCR_HEIGHT, GL_DEPTH_BUFFER_BIT, GL_NEAREST);
-		glBindBuffer(GL_FRAMEBUFFER, 0);
+		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, fbo);
+		glBlitFramebuffer(0, 0, SCR_WIDTH, SCR_HEIGHT, 0, 0, SCR_WIDTH, SCR_HEIGHT,
+			GL_DEPTH_BUFFER_BIT, GL_NEAREST);
 
-		// -----------------------
+		// 3. Render Lightning 
+		// -----------------
+		// rendered to fbo so bolt can be blurred and the scene and bolt can be blended together
+		glEnable(GL_DEPTH_TEST);
 
-		// Render Lightning
 		boltShader.Use();
-		boltShader.SetVec3("color", vec3(1, 1, 0));
-		boltShader.SetFloat("alpha", 1.0f);
+		boltShader.SetVec3("color", boltColor);
+		boltShader.SetFloat("alpha", boltAlpha);
 		SetVPMatricies(boltShader, view, projection);
 		if (DYNAMIC_BOLT) {
 			// Dynamic Bolt
@@ -351,10 +440,44 @@ int main() {
 			}
 		}
 
-		// Render GUI
-		// ---------------
+		// 4. Blur Lightning
+		// -----------------
+		bool horizontal = true, first_iteration = true;
+		blurShader.Use();
+		for (int i = 0; i < amount; i++)
+		{
+			glBindFramebuffer(GL_FRAMEBUFFER, pingpongFBO[horizontal]);
+			blurShader.SetInt("horizontal", horizontal);
+			// bind texutre of other framebuffer, or the texture to blur if first iteration
+			glBindTexture(GL_TEXTURE_2D, first_iteration ? tcbo[1] : pingpongBuffer[!horizontal]);
+			// render quad
+			RenderQuad();
+			// swap buffers
+			horizontal = !horizontal;
+			if (first_iteration) {
+				first_iteration = false;
+			}
+		}
+
+		// 4.5. Blend Scene and Blurred Bolt to default framebuffer
+		// -----------------
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+		glClear(GL_COLOR_BUFFER_BIT);
+		//glDisable(GL_DEPTH_TEST);
+
+		screenShader.Use();
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, tcbo[0]);	// Scene
+		glActiveTexture(GL_TEXTURE1);
+		glBindTexture(GL_TEXTURE_2D, pingpongBuffer[!horizontal]); // Blurred Bolt
+		screenShader.SetInt("bloom", bloom);
+		screenShader.SetFloat("exposure", exposure);
+		RenderQuad();
+
+		// 5. GUI
+		// -----------------
 		RenderImGui(&lightManager);
-		// ---------------
+		// --------------------------
 
 		// glfw: swap buffers and poll IO events
 		glfwSwapBuffers(window);
@@ -493,7 +616,7 @@ void RenderImGui(LightManager* lm) {
 	ImGui_ImplGlfw_NewFrame();
 	ImGui::NewFrame();;
 
-	//PostProcessingGUI();
+	PostProcessingGUI();
 
 	lm->LightingGUI();
 
@@ -530,7 +653,7 @@ void BoltControlGUI() {
 void PostProcessingGUI() {
 	ImGui::Begin("Post Processing");
 	ImGui::SliderInt("Blur Amount", &amount, 0, 15);
-	ImGui::SliderFloat("Exposure", &exposure, 0.1, 100);
+	ImGui::SliderFloat("Exposure", &exposure, 0.1f, 100);
 	ImGui::End();
 }
 
