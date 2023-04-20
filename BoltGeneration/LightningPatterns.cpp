@@ -3,14 +3,15 @@
 // variables
 int xVariation = 4;
 int yVariation = 4;
-float multiplyer = 0.1f;
+float multiplyer = 1.25f;
 
 float length = 1.5f;
 
 // Pattern Generation Functions
 // -------------------------
+// Random Positions --------
 // STATIC
-std::shared_ptr<vec3[numSegmentsInPattern]> GenerateRandomPositionsLightningPattern(vec3 start, 
+std::shared_ptr<vec3[numSegmentsInPattern]> GenerateRandomPositionsLightningPattern(vec3 start,
 	std::shared_ptr<vec3[numSegmentsInPattern]> patternPtr) {
 
 	patternPtr.get()[0] = ConvertWorldToScreen(start);
@@ -23,11 +24,11 @@ std::shared_ptr<vec3[numSegmentsInPattern]> GenerateRandomPositionsLightningPatt
 }
 
 // DYNAMIC BOLT
-vector<pair<vec3, vec3>>* GenerateRandomPositionsLightningPattern(vec3 start, 
+vector<pair<vec3, vec3>>* GenerateRandomPositionsLightningPattern(vec3 start,
 	vector<pair<vec3, vec3>>* patternPtr) {
 	// clear the pattern
 	patternPtr->clear();
-	
+
 	vec3 end;
 	for (int i = 0; i < numSegmentsInPattern; i++) {
 		end = NextPoint(start);
@@ -38,6 +39,7 @@ vector<pair<vec3, vec3>>* GenerateRandomPositionsLightningPattern(vec3 start,
 	return patternPtr;
 }
 
+// Particle System ---------
 // STATIC BOLT 
 std::shared_ptr<vec3[numSegmentsInPattern]> GenerateParticleSystemPattern(vec3 start, vec3 seed,
 	std::shared_ptr<vec3[numSegmentsInPattern]> patternPtr) {
@@ -70,7 +72,7 @@ std::shared_ptr<vec3[numSegmentsInPattern]> GenerateParticleSystemPattern(vec3 s
 }
 
 // DYNAMIC BOLT
-vector<pair<vec3, vec3>>* GenerateParticleSystemPattern(vec3 start, vec3 seed, 
+vector<pair<vec3, vec3>>* GenerateParticleSystemPattern(vec3 start, vec3 seed,
 	vector<pair<vec3, vec3>>* patternPtr) {
 	// clear the pattern
 	patternPtr->clear();
@@ -97,7 +99,44 @@ vector<pair<vec3, vec3>>* GenerateParticleSystemPattern(vec3 start, vec3 seed,
 
 	return patternPtr;
 }
-// --------------------------
+
+// L-System ----------------
+// STATIC
+vector<pair<vec3, vec3>>* GenerateLSystemPattern(vec3 start, vec3 end, vector<pair<vec3, vec3>>* patternPtr, int detail, int size) {
+	// add start and end to the pattern
+	float maxDisplacement = 10;
+	
+
+	for (int i = 0; i < detail; i++) {
+		// get the midpoint
+		vec3 mid = (start + end) / 2.0f;
+
+		// get perpendicular axis
+		vec3 perpAxis;
+
+		// move point along perp axis by a random amount
+		float displacement = (rand() % (int)maxDisplacement) / 100.0f;
+		mid = mid + perpAxis * displacement;
+
+ 		// add the midpoint to the pattern
+
+		// get the new start and end
+		start = mid;
+		end = mid;
+
+		maxDisplacement *= 0.5f;
+	}
+
+	//
+
+
+	return patternPtr;
+}
+
+// DYNAMIC
+
+
+// -------------------------
 
 // Helper Functions
 // --------------------------
@@ -177,7 +216,7 @@ void BoltGenerationGUI(int method) {
 		ImGui::Text("Segment Position Variation");
 		ImGui::SliderInt("X Variation", &xVariation, 2, 10);
 		ImGui::SliderInt("Y Variation", &yVariation, 2, 10);
-		ImGui::SliderFloat("Z Variation", &multiplyer, 0.1, 2);
+		ImGui::SliderFloat("Multiplyer", &multiplyer, 0.1, 2);
 		break;
 	case 1: 
 		ImGui::Text("Particle System");
