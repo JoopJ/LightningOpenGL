@@ -1,17 +1,24 @@
 #include "LightningPatterns.h"
 
-// variables
+// Variables
+// Random
 int xVariation = 4;
 int yVariation = 4;
 float multiplyer = 1.25f;
 
+// Particle
 float length = 1.5f;
+
+// L-System
+int startingMaxDisplacement = 30;
+int LSystemDetail = 3;
+vec3 LSystemEndPosition = vec3(0,-20,0);
 
 // Pattern Generation Functions
 // -------------------------
 // Random Positions --------
-// STATIC
-std::shared_ptr<vec3[numSegmentsInPattern]> GenerateRandomPositionsLightningPattern(vec3 start,
+// STATIC BOLT
+int GenerateRandomPositionsPattern(vec3 start,
 	std::shared_ptr<vec3[numSegmentsInPattern]> patternPtr) {
 
 	patternPtr.get()[0] = ConvertWorldToScreen(start);
@@ -19,12 +26,12 @@ std::shared_ptr<vec3[numSegmentsInPattern]> GenerateRandomPositionsLightningPatt
 		start = NextPoint(start);
 		patternPtr.get()[i] = ConvertWorldToScreen(start);
 	}
-
-	return patternPtr;
+	// will always have the same size
+	return numSegmentsInPattern;
 }
 
 // DYNAMIC BOLT
-vector<pair<vec3, vec3>>* GenerateRandomPositionsLightningPattern(vec3 start,
+vector<pair<vec3, vec3>>* GenerateRandomPositionsPattern(vec3 start,
 	vector<pair<vec3, vec3>>* patternPtr) {
 	// clear the pattern
 	patternPtr->clear();
@@ -41,7 +48,7 @@ vector<pair<vec3, vec3>>* GenerateRandomPositionsLightningPattern(vec3 start,
 
 // Particle System ---------
 // STATIC BOLT 
-std::shared_ptr<vec3[numSegmentsInPattern]> GenerateParticleSystemPattern(vec3 start, vec3 seed,
+int GenerateParticleSystemPattern(vec3 start, vec3 seed,
 	std::shared_ptr<vec3[numSegmentsInPattern]> patternPtr) {
 
 	seed = normalize(seed);
@@ -66,8 +73,8 @@ std::shared_ptr<vec3[numSegmentsInPattern]> GenerateParticleSystemPattern(vec3 s
 		newPointMove = RotatePointAboutSeed(newPointMove, seedPerpAxis);
 		newPoint = prevEnd + newPointMove;
 	}
-
-	return patternPtr;
+	// will always have the same size
+	return numSegmentsInPattern;
 
 }
 
@@ -101,49 +108,76 @@ vector<pair<vec3, vec3>>* GenerateParticleSystemPattern(vec3 start, vec3 seed,
 }
 
 // L-System ----------------
-// STATIC
-vector<pair<vec3, vec3>>* GenerateLSystemPattern(vec3 start, vec3 end, vector<pair<vec3, vec3>>* patternPtr, int detail, int size) {
-	// add start and end to the pattern
-	float maxDisplacement = 10;
-	
+// Retuns the number of points in the pattern (int).
+// STATIC BOLT
+int GenerateLSystemPattern(vec3 start, 
+	std::shared_ptr<vec3[numSegmentsInPattern]> patternPtr) {
 
-	for (int i = 0; i < detail; i++) {
-		// get the midpoint
-		vec3 mid = (start + end) / 2.0f;
-
-		// get perpendicular axis
-		vec3 perpAxis;
-
-		// move point along perp axis by a random amount
-		float displacement = (rand() % (int)maxDisplacement) / 100.0f;
-		mid = mid + perpAxis * displacement;
-
- 		// add the midpoint to the pattern
-
-		// get the new start and end
-		start = mid;
-		end = mid;
-
-		maxDisplacement *= 0.5f;
+	int size = (pow(2, LSystemDetail)) + 1;
+	// check if the size is too big for array
+	if (size > numSegmentsInPattern) {
+		std::cout << "WARNING::L-SYSTEM::PATTERN SIZE EXCEEDS MAX PATTERN SIZE" << std::endl;
+		return 0;
 	}
 
-	//
+	int startIndex = 0;
+	int endIndex = size - 1;
 
+	patternPtr[startIndex] = ConvertWorldToScreen(start);
+	patternPtr[endIndex] = ConvertWorldToScreen(LSystemEndPosition);
+
+	LSystemSubDivide(start, LSystemEndPosition, startIndex, endIndex, 
+		LSystemDetail, startingMaxDisplacement, patternPtr);
+
+	// variable size
+	return size;
+}
+
+// DYNAMIC BOLT
+vector<pair<vec3, vec3>>* GenerateLSystemPattern(vec3 start,
+	vector<pair<vec3, vec3>>* patternPtr) {
+
+	const int size = (pow(2, LSystemDetail)) + 1;
+
+	// stores the points of the pattern
+	vector<vec3> patternPoints;
+	patternPoints.resize(size);
+	vector<vec3>* patternPointsPtr = &patternPoints;
+
+	int startIndex = 0;
+	int endIndex = size - 1;
+
+	patternPointsPtr->at(startIndex) = ConvertWorldToScreen(start);
+	patternPointsPtr->at(endIndex) = ConvertWorldToScreen(LSystemEndPosition);
+
+	LSystemSubDivide(start, LSystemEndPosition, startIndex, endIndex, 
+		LSystemDetail, (float)startingMaxDisplacement, patternPointsPtr);
+
+	// add the points to the pattern as pairs
+	// TODO : Handling branching will go here.
+	patternPtr->clear();
+	patternPtr->resize(size);
+	for (int i = 0; i < size-1; i++) {
+		pair<vec3, vec3> seg = { patternPoints.at(i), patternPoints.at(i + 1) };
+		patternPtr->at(i) = seg;
+	}
 
 	return patternPtr;
 }
-
-// DYNAMIC
-
 
 // -------------------------
 
 // Helper Functions
 // --------------------------
 
-// General:
+//		General:
+// Returns a quaternion that rotates about the given seed vector
+// by the given angle (in radians).
+quaternion ConvertRotationQuaternion(vec3 seed, float angle) {
+	return quaternion(cos(angle / 2), seed.x * sin(angle / 2), seed.y * sin(angle / 2), seed.z * sin(angle / 2));
+}
 
-// Random Positions:
+//		Random Positions:
 glm::vec3 NextPoint(glm::vec3 point) {
 	// ger random variatins
 	int dx = (rand() % xVariation * 2 + 1) - xVariation;
@@ -155,28 +189,6 @@ glm::vec3 NextPoint(glm::vec3 point) {
 	point.z += dz * multiplyer;
 
 	return point;
-}
-
-// Particle System:
-quaternion ConvertRotationQuaternion(vec3 seed, float angle) {
-	// rotation quaternion
-	quaternion qr = quaternion(cos(angle / 2), seed.x * sin(angle / 2), seed.y * sin(angle / 2), seed.z * sin(angle / 2));
-	return qr;
-}
-
-// Returns a pair of perpendicular axis to the seed.
-// The seed acts as the y axis and the two returned axis
-// will act as the x and z axis.
-// Seed should be normalized
-pair<vec3, vec3> GetRotationAxis(vec3 seed) {
-	// get arbitrary axis along yz plane of the seed
-	vec3 arb = vec3(seed.x, -seed.z, seed.y);
-
-	// get 2 perpendicular vectors to the seed
-	vec3 perp1 = cross(seed, arb);
-	vec3 perp2 = cross(seed, perp1);
-
-	return { perp1, perp2 };
 }
 
 vec3 RotatePointAboutSeed(vec3 point, pair<vec3, vec3> seedPerpAxis) {
@@ -193,7 +205,7 @@ vec3 RotatePointAboutSeed(vec3 point, pair<vec3, vec3> seedPerpAxis) {
 	// convert point to quaternion
 	quaternion p = quaternion(point.x, point.y, point.z, 0);
 
-	// apply rotation
+	// apply rotations
 	quaternion q1 = qr1 * p * qr1.makeInverse();
 	quaternion q2 = qr2 * p * qr2.makeInverse();
 	quaternion final = q2 * q1 * p * q1.makeInverse() * q2.makeInverse();
@@ -201,6 +213,103 @@ vec3 RotatePointAboutSeed(vec3 point, pair<vec3, vec3> seedPerpAxis) {
 	// extract new point
 	vec3 newPoint = vec3(final.X, final.Y, final.Z);
 	return newPoint;
+}
+
+//		Particle System:
+// Returns a pair of perpendicular axis to the seed.
+// The seed acts as the y axis and the two returned axis
+// will act as the x and z axis.
+// Seed should be normalized
+pair<vec3, vec3> GetRotationAxis(vec3 seed) {
+	// get arbitrary axis along yz plane of the seed
+	vec3 arb = vec3(seed.x, -seed.z, seed.y);
+
+	// get 2 perpendicular vectors to the seed
+	vec3 perp1 = cross(seed, arb);
+	vec3 perp2 = cross(seed, perp1);
+
+	return { perp1, perp2 };
+}
+
+//		L-System:
+// STATIC
+void LSystemSubDivide(vec3 start, vec3 end, int startIndex, int endIndex, int detail, 
+	float maxDisplacement, std::shared_ptr<vec3[numSegmentsInPattern]> patternPtr) {
+
+	// calculate mid and add to pattern
+	vec3 mid = GetMidPnt(start, end, maxDisplacement);
+	int midIndex = (startIndex + endIndex) / 2;
+
+	patternPtr[midIndex] = ConvertWorldToScreen(mid);
+
+	detail -= 1;
+	maxDisplacement /= 2;
+
+	if (detail > 0) {
+		// iterate on left side (start to mid)
+		LSystemSubDivide(start, mid, startIndex, midIndex, detail, maxDisplacement, patternPtr);
+		// iterate on right side (mid to end)
+		LSystemSubDivide(mid, end, midIndex, endIndex, detail, maxDisplacement, patternPtr);
+	}
+}
+// DYNAMIC
+void LSystemSubDivide(vec3 start, vec3 end, int startIndex, int endIndex, int detail,
+	float maxDisplacement, vector<vec3>* patternPtr) {
+
+	// calculate mid and add to pattern
+	vec3 mid = GetMidPnt(start, end, maxDisplacement);
+	int midIndex = (startIndex + endIndex) / 2;
+
+	patternPtr->at(midIndex) = ConvertWorldToScreen(mid);
+
+	detail -= 1;
+	maxDisplacement /= 2;
+
+	if (detail > 0) {
+		// iterate on left side (start to mid)
+		LSystemSubDivide(start, mid, startIndex, midIndex, detail, maxDisplacement, patternPtr);
+		// iterate on right side (mid to end)
+		LSystemSubDivide(mid, end, midIndex, endIndex, detail, maxDisplacement, patternPtr);
+	}
+}
+
+vec3 GetMidPnt(vec3 start, vec3 end, int maxDisplacement) {
+	vec3 mid = (start + end) / 2.0f;
+
+	// get perpendicular axis
+	vec3 perp = GetPerpAxis(end - start);
+
+	// displace mid point along the perpendicular axis by
+	// a random magnitude between 0 and maxDisplacement.
+	mid += perp * (float(rand()) / float((RAND_MAX)) * maxDisplacement);
+
+	return mid;
+}
+
+// Returns a perpendicular vector to the given axis.
+// the perp vector is rotated by a random angle around
+// the original axis.
+vec3 GetPerpAxis(vec3 axis) {
+	// get perpendicular axis
+	vec3 perp = normalize(cross(axis, vec3(axis.x, axis.z, axis.y)));
+
+	// get random angle
+	float radian = glm::radians((float)(rand() % 360));
+
+	// convert perp to quaternion
+	quaternion p = quaternion(perp.x, perp.y, perp.z, 0);
+
+	// create rotation quaternion
+	quaternion r = ConvertRotationQuaternion(axis, radian);
+
+	// apply rotation
+	p = r * p * r.makeInverse();
+
+	return normalize(vec3(p.X, p.Y, p.Z));
+}
+
+float GetLSystemDetail() {
+	return LSystemDetail;
 }
 // -----------------------
 
@@ -225,6 +334,11 @@ void BoltGenerationGUI(int method) {
 		break;
 	case 2:
 		ImGui::Text("L-System");
+		ImGui::Text("Max Displacement");
+		ImGui::InputInt("##", &startingMaxDisplacement, 1, 10);
+
+		ImGui::Text("Detail");
+		ImGui::InputInt("###", &LSystemDetail, 1, 5);
 		break;
 	}
 	ImGui::Separator();

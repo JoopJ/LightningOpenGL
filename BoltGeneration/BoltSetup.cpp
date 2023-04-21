@@ -17,30 +17,41 @@ The STATIC option is the default, to use the DYNAMIC option, set the DYNAMIC_BOL
 
 // -------------------
 // Bolt Generation Method choices
-enum Method { Random, Particle };
-Method methods[2] = { Random, Particle };
+enum Method { Random, Particle, LSystem };
+Method methods[3] = { Random, Particle, LSystem };
 int currentMethod = 0;
+float lightPerSegRandom = 0.75f;
+float lightPerSegParticle = 0.75f;
+float lightPerSegLSystem = 0.5f;
+// scales the number of lights per segment down as detail increases
+float lightPerSegLSystemScalar = 0.5f;
 
 // Variables
-int lightPerSeg = 1;
-vec3 particleSystemSeedSegment;
+float lightPerSeg;
 int numActiveLights;
+int numActiveSegments;
+
+vec3 particleSystemSeedSegment;
 // --------------------
 
 // BoltSegment Setup
 // -------------
 // STATIC BOLT
-void DefineBoltLines(LineBoltSegment* lboltPtr, std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr) {
-	for (int i = 0; i < numSegmentsInPattern - 1; i++) {
-		lboltPtr[i].Setup(lightningPatternPtr[i], lightningPatternPtr[i + 1]);
+void DefineBoltLines(LineBoltSegment* lboltPtr, int numActiveSegments, 
+	std::shared_ptr<glm::vec3[numSegmentsInPattern]> patternPtr) {
+
+	for (int i = 0; i < numActiveSegments - 1; i++) {
+		lboltPtr[i].Setup(patternPtr[i], patternPtr[i + 1]);
 	}
 }
 
 // DYNAMIC BOLT
-void DefineBoltLines(vector<LineBoltSegment>* lboltPtr, vector<pair<vec3, vec3>>* lightningPatternPtr) {
+void DefineBoltLines(vector<LineBoltSegment>* lboltPtr, 
+	vector<pair<vec3, vec3>>* patternPtr) {
+
 	lboltPtr->clear();
-	for (int i = 0; i < lightningPatternPtr->size(); i++) {
-		lboltPtr->emplace_back(lightningPatternPtr->at(i).first, lightningPatternPtr->at(i).second);
+	for (int i = 0; i < patternPtr->size(); i++) {
+		lboltPtr->emplace_back(patternPtr->at(i).first, patternPtr->at(i).second);
 	}
 }
 // -----------
@@ -50,34 +61,49 @@ void DefineBoltLines(vector<LineBoltSegment>* lboltPtr, vector<pair<vec3, vec3>>
 // Position a number of lights between each bolt segment's start and end points, 
 // including the start point but not the end point, this will create 
 // a smooth number of lights along the bolt
+
 // STATIC BOLT
-void PositionBoltPointLights(vec3* lightPositionsPtr, 
-	std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr) {
+void PositionBoltPointLights(vec3* lightPositionsPtr, int numActiveSegments,
+	std::shared_ptr<glm::vec3[numSegmentsInPattern]> patternPtr) {
 
 	unsigned int lighPosIndex = 0;
-	for (int seg = 0; seg < numSegmentsInPattern - 1; seg++) {
-		vec3 segDir = (lightningPatternPtr[seg + 1] - lightningPatternPtr[seg]) / (float)lightPerSeg;
-		for (int light = 0; light < lightPerSeg; light++) {
-			*(lightPositionsPtr + lighPosIndex) = lightningPatternPtr[seg] + segDir * (float)light;
+	float count = 0;
+
+	for (int seg = 0; seg < numActiveSegments - 1; seg++) {
+		count += lightPerSeg;
+
+		if (count > 1) {
+			// position light in the middle of the segment
+			vec3 segDir = (patternPtr[seg + 1] - patternPtr[seg]);
+			*(lightPositionsPtr + lighPosIndex) = patternPtr[seg] + segDir * 0.5f;
 			lighPosIndex++;
-		}
+			count -= 1;
+		};
 	}
+
 	numActiveLights = lighPosIndex;
 }
 
 // DYNAMIC BOLT
 void PositionBoltPointLights(vector<vec3>* lightPositionsPtr,
-	vector<pair<vec3, vec3>>* lightningPatternPtr) {
+	vector<pair<vec3, vec3>>* patternPtr) {
 	// remove old light positions
 	lightPositionsPtr->clear();
 	numActiveLights = 0;
 
-	for (int seg = 0; seg < lightningPatternPtr->size(); seg++) {
-		vec3 segDir = (lightningPatternPtr->at(seg).second - lightningPatternPtr->at(seg).first) / (float)lightPerSeg;
-		for (int light = 0; light < lightPerSeg; light++) {
-			lightPositionsPtr->push_back(lightningPatternPtr->at(seg).first + segDir * (float)light);
+	float count = 0;
+
+	for (int seg = 0; seg < patternPtr->size(); seg++) {
+		count += lightPerSeg;
+
+		if (count >= 1) {
+			// position light in the middle of the segment
+			vec3 segDir = (patternPtr->at(seg).second - patternPtr->at(seg).first);
+			lightPositionsPtr->push_back(patternPtr->at(seg).first + segDir * 0.5f);
+
 			numActiveLights++;
-		}
+			count -= 1;
+		};
 	}
 }
 // ----------
@@ -86,44 +112,54 @@ void PositionBoltPointLights(vector<vec3>* lightPositionsPtr,
 // ----------
 // DYNAMIC BOLT
 void NewBolt(vector<LineBoltSegment>* segmentsPtr, vector<vec3>* lightsPtr, 
-	vec3 startPosition,	vector<pair<vec3, vec3>>* lightningPatternPtr) {
+	vec3 startPosition,	vector<pair<vec3, vec3>>* patternPtr) {
+
 	// Generate New Bolt Pattern
 	switch (methods[currentMethod]) {
 	case Random:
-		lightningPatternPtr = GenerateRandomPositionsLightningPattern(startPosition, 
-			lightningPatternPtr);
+		patternPtr = GenerateRandomPositionsPattern(startPosition,
+			patternPtr);
 		break;
 	case Particle:
-		lightningPatternPtr = GenerateParticleSystemPattern(startPosition, 
-			particleSystemSeedSegment, lightningPatternPtr);
+		patternPtr = GenerateParticleSystemPattern(startPosition,
+			particleSystemSeedSegment, patternPtr);
 		break;
+	case LSystem:
+		patternPtr = GenerateLSystemPattern(startPosition, patternPtr);
+		break;
+
 	}
 
 	// Set the LineSegment's Positions
-	DefineBoltLines(segmentsPtr, lightningPatternPtr);
+	DefineBoltLines(segmentsPtr, patternPtr);
 	// Set the PointLight's Positions
-	PositionBoltPointLights(lightsPtr, lightningPatternPtr);
+	PositionBoltPointLights(lightsPtr, patternPtr);
 }
 
 // STATIC BOLT
 void NewBolt(LineBoltSegment* segmentsPtr, vec3* lightsPtr, vec3 startPosition,
-	std::shared_ptr<vec3[numSegmentsInPattern]> lightningPatternPtr) {
+	std::shared_ptr<vec3[numSegmentsInPattern]> patternPtr) {
+
 	// Generate New Bolt Pattern
+	numActiveSegments = 0;
 	switch (methods[currentMethod]) {
 	case Random:
-		lightningPatternPtr = GenerateRandomPositionsLightningPattern(startPosition, 
-			lightningPatternPtr);
+		numActiveSegments = GenerateRandomPositionsPattern(startPosition, 
+			patternPtr);
 		break;
 	case Particle:
-		lightningPatternPtr = GenerateParticleSystemPattern(startPosition, 
-			particleSystemSeedSegment, lightningPatternPtr);
+		numActiveSegments = GenerateParticleSystemPattern(startPosition, 
+			particleSystemSeedSegment, patternPtr);
+		break;
+	case LSystem:
+		numActiveSegments = GenerateLSystemPattern(startPosition, patternPtr);
 		break;
 	}
 
 	// Set the LingSegment's Positions
-	DefineBoltLines(segmentsPtr, lightningPatternPtr);
+	DefineBoltLines(segmentsPtr, numActiveSegments, patternPtr);
 	// Set the PointLight's Positions
-	PositionBoltPointLights(lightsPtr, lightningPatternPtr);
+	PositionBoltPointLights(lightsPtr, numActiveSegments, patternPtr);
 }
 // ---------
 
@@ -134,6 +170,14 @@ int GetLightPerSegment() {
 
 int GetCurrentMethod() {
 	return currentMethod;
+}
+
+int GetNumActiveLights() {
+	return numActiveLights;
+}
+
+int GetNumActiveSegments() {
+	return numActiveSegments;
 }
 
 // Setters
@@ -147,4 +191,22 @@ void SetParticleSystemSeedSegment(vec3 seed) {
 
 void SetMethod(int m) {
 	currentMethod = m;
+
+	// Set the number of lights per segment based on the method
+	switch (m) {
+		case 0:
+			lightPerSeg = lightPerSegRandom;
+			break;
+		case 1:
+			lightPerSeg = lightPerSegParticle;
+			break;
+		case 2:
+			lightPerSeg = lightPerSegLSystem;
+
+			// scale the number of lights per segment based on the LSystem detail
+			if (GetLSystemDetail() > 3) {
+				lightPerSeg *= pow(lightPerSegLSystemScalar, (GetLSystemDetail() - 3));
+			}
+			break;
+	}
 }

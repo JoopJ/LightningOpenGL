@@ -47,7 +47,7 @@ ImGui is used for the GUI which allows editting of various variables used to gen
 #include "FunctionLibrary.h"
 #include "CameraControl.h"
 #include "Renderer.h"
-#include "Performance.h"
+#include "Timer.h"
 
 using glm::vec3;
 using glm::mat4;
@@ -55,12 +55,12 @@ using std::vector;
 using glm::radians;
 using glm::lookAt;
 
-// lightning start position
+// bolt generation settings
 const vec3 startPnt = vec3(0, 90, 0);
 
 // post processing
-int amount = 10;
-float exposure = 1.0f;
+int amount = 2;
+float exposure = 0.5f;
 float gamma = 2.2f;
 
 // lightning options
@@ -77,11 +77,11 @@ bool gammaCorrectionEnabled = true;
 bool exposureEnabled = true;
 
 // Array Type
-bool DYNAMIC_BOLT = false;
+bool DYNAMIC_BOLT = true;
 
 // Method Choice
-int methodChoice = 0; // 0 = random, 1 = particle system
-const char* methodNames[2] = { "Random Positions", "Particle System" };
+int methodChoice = 2; // 0 = random, 1 = particle system, 2 = l-system
+const char* methodNames[3] = { "Random Positions", "Particle System", "L-System"};
 
 // Debuging
 bool lightBoxesEnable = false;
@@ -93,8 +93,8 @@ void SetVPMatricies(Shader shader, mat4 view, mat4 projection);
 // Drawing
 void DrawLineBolt(LineBoltSegment* lboltPtr);
 void DrawLineBolt(vector<LineBoltSegment>* lboltPtr);
-void DrawLightBoxes(Shader shader, vector<vec3>* lightPositions, int numLights);
-void DrawLightBoxes(Shader shader, vec3* lightPositions, int numLights);
+void DrawLightBoxes(Shader shader, vector<vec3>* lightPositions);
+void DrawLightBoxes(Shader shader, vec3* lightPositions);
 // Input
 void ProcessMiscInput(GLFWwindow* window, bool* firstButtonPress);
 bool ProcessLightningControlInput(GLFWwindow* window);
@@ -210,15 +210,10 @@ int main() {
 
 	// Performance Manager Setup
 	PerformanceManager performanceManager;
+	//performanceManager.SetTimerPerSecondOutput(FRAME, true);
+	//performanceManager.SetTimerAvgOutput(FRAME, true);
+	performanceManager.SetTimerAvgTimeInterval(FRAME, 1.0);
 	// -------------------------
-
-	// Performance Constructors
-	// -----------------
-	Performance mainLoop("Main Loop", 10.0);
-	mainLoop.SetPerSecondOutput(false);
-	mainLoop.SetAverageOutput(true);
-	mainLoop.Start();
-	// -----------------
 
 	// Testing ---------
 	// mat4 lightRotateMat4 = glm::rotate(mat4(2.0), glm::radians(0.01f), vec3(0, 1, 0)); // used for rotating the lights
@@ -249,13 +244,14 @@ int main() {
 		// Dynamic Bolt
 		NewBolt(dynamicLineSegmentsPtr, dynamicPointLightPositionsPtr,
 			startPnt, lightningDynamicPatternPtr);
-		lightManager.SetLightPositions(dynamicPointLightPositionsPtr, 
-			dynamicPointLightPositionsPtr->size());
+		
+		lightManager.SetLightPositions(dynamicPointLightPositionsPtr);
 	}
 	else {
 		// Static Bolt
 		NewBolt(staticLineSegmentsPtr, staticPointLightPositionsPtr,
 			startPnt, lightningStaticPatternPtr);
+
 		lightManager.SetLightPositions(staticPointLightPositionsPtr);
 	}
 	// ---------------
@@ -270,6 +266,7 @@ int main() {
 
 	// render loop
 	while (!glfwWindowShouldClose(window)) {
+		performanceManager.StartTimer(FRAME);
 		// pre-frame time logic
 		// -----------------------
 		float currentFrame = static_cast<float>(glfwGetTime());
@@ -277,32 +274,31 @@ int main() {
 		SetLastFrame(currentFrame);
 		// -----------------------
 		
-		// Performance
+		// Performance updates
 		// -----------------------
-		mainLoop.Update();
-
 		performanceManager.DynamicPatternInfo(lightningDynamicPatternPtr);
 		performanceManager.StaticPatternInfo(lightningStaticPatternPtr);
 		// -----------------------
 
-		// input
+		// Input
 		// -----------------------
 		ProcessKeyboardInput(window);
 		ProcessMiscInput(window, &firstMouseKeyPress);
+
 		if (ProcessLightningControlInput(window)) {
 			// New Bolt
-			// Generate the pattern and set the line segment positions and point light positions
 			if (DYNAMIC_BOLT) {
 				// Dynamic Bolt
 				NewBolt(dynamicLineSegmentsPtr, dynamicPointLightPositionsPtr,
 					startPnt, lightningDynamicPatternPtr);
-				lightManager.SetLightPositions(dynamicPointLightPositionsPtr, 
-					dynamicPointLightPositionsPtr->size());
+
+				lightManager.SetLightPositions(dynamicPointLightPositionsPtr);
 			}
 			else {
 				// Static Bolt
 				NewBolt(staticLineSegmentsPtr, staticPointLightPositionsPtr,
 					startPnt, lightningStaticPatternPtr);
+
 				lightManager.SetLightPositions(staticPointLightPositionsPtr);
 			}
 		}
@@ -320,6 +316,8 @@ int main() {
 
 		// 1. Geometry Pass: render all geometric/color data to g-buffer
 		// -----------------
+		performanceManager.StartTimer(GEOMETRY_PASS);
+
 		gBuffer.Bind();
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -333,13 +331,17 @@ int main() {
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
 		// Generate Shadow Maps
+		performanceManager.StartTimer(RENDER_SHADOWS);
 		lightManager.RenderDepthMaps();
-		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+		performanceManager.UpdateTimer(RENDER_SHADOWS);
 
+		performanceManager.UpdateTimer(GEOMETRY_PASS);
 
 		// 2. Lighting Pass: calculate lighting by iterating over a screen filled quad 
 		//					 pixel-by-pixel using the g-buffer's content.
 		// -----------------
+		performanceManager.StartTimer(LIGHTING_PASS);
+
 		glViewport(0, 0, SCR_WIDTH, SCR_HEIGHT);
 		fboManager.Bind();
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -352,24 +354,34 @@ int main() {
 		lightingPassShader.SetVec3("viewPos", GetCameraPos());
 		lightingPassShader.SetBool("shadows", shadowsEnabled);
 		lightingPassShader.SetBool("blurEnabled", bloom);
+
 		RenderQuad();
+
+		performanceManager.UpdateTimer(LIGHTING_PASS);
 
 		// 2.5. copy contents of geometry buffer to fbo
 		// -----------------
+		performanceManager.StartTimer(G_BUFFER_COPY);
+
 		gBuffer.BindRead();
 		fboManager.BindDraw();
 		glBlitFramebuffer(0, 0, SCR_WIDTH, SCR_HEIGHT, 0, 0, SCR_WIDTH, SCR_HEIGHT,
 			GL_DEPTH_BUFFER_BIT, GL_NEAREST);
 
-		// 3. Render Lightning 
+		performanceManager.UpdateTimer(G_BUFFER_COPY);
+
+		// 3. Render Lightning Bolt
 		// -----------------
 		// rendered to fbo so bolt can be blurred and the scene and bolt can be blended together
+		performanceManager.StartTimer(RENDER_BOLT);
+		
 		glEnable(GL_DEPTH_TEST);
 
 		boltShader.Use();
 		boltShader.SetVec3("color", boltColor);
 		boltShader.SetFloat("alpha", boltAlpha);
 		SetVPMatricies(boltShader, view, projection);
+
 		if (DYNAMIC_BOLT) {
 			// Dynamic Bolt
 			DrawLineBolt(dynamicLineSegmentsPtr);
@@ -378,8 +390,7 @@ int main() {
 				// Draw Point Light boxes
 				lightCubeShader.Use();
 				SetVPMatricies(lightCubeShader, view, projection);
-				DrawLightBoxes(lightCubeShader, dynamicPointLightPositionsPtr,
-					dynamicPointLightPositionsPtr->size());
+				DrawLightBoxes(lightCubeShader, dynamicPointLightPositionsPtr);
 			}
 		}
 		else {
@@ -390,17 +401,24 @@ int main() {
 				// Draw Point Light boxes
 				lightCubeShader.Use();
 				SetVPMatricies(lightCubeShader, view, projection);
-				DrawLightBoxes(lightCubeShader, staticPointLightPositionsPtr,
-					numSegmentsInPattern);
+				DrawLightBoxes(lightCubeShader, staticPointLightPositionsPtr);
 			}
 		}
 
+		performanceManager.UpdateTimer(RENDER_BOLT);
+
 		// 4. Bloom
 		// -----------------
+		performanceManager.StartTimer(BLOOM);
+
 		bool horizontal = fboManager.ApplyBloom(blurShader, amount);
+
+		performanceManager.UpdateTimer(BLOOM);
 
 		// 5. Blend Scene and Blurred Bolt to default framebuffer
 		// -----------------
+		performanceManager.StartTimer(BLEND);
+
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
 		glClear(GL_COLOR_BUFFER_BIT);
 
@@ -413,6 +431,8 @@ int main() {
 		screenShader.SetFloat("gamma", gamma);
 		RenderQuad();
 
+		performanceManager.UpdateTimer(BLEND);
+
 		// 6. GUI
 		// -----------------
 		RenderImGui(&lightManager, &performanceManager);
@@ -421,6 +441,8 @@ int main() {
 		// glfw: swap buffers and poll IO events
 		glfwSwapBuffers(window);
 		glfwPollEvents();
+
+		performanceManager.UpdateTimer(FRAME);
 	}
 
 	// imgui: shutdown and cleanup
@@ -437,7 +459,7 @@ int main() {
 // ---------------
 // STATIC
 void DrawLineBolt(LineBoltSegment* lboltPtr) {
-	for (int i = 0; i < numSegmentsInPattern - 1; i++) {
+	for (int i = 0; i < GetNumActiveSegments() - 1; i++) {
 		lboltPtr[i].Draw();
 	}
 }
@@ -450,8 +472,8 @@ void DrawLineBolt(vector<LineBoltSegment>* lboltPtr) {
 
 // Light Boxes
 // VECTOR
-void DrawLightBoxes(Shader shader, vector<vec3>* lightPositions, int numLights) {
-	for (unsigned int i = 0; i < numLights; i++) {
+void DrawLightBoxes(Shader shader, vector<vec3>* lightPositions) {
+	for (unsigned int i = 0; i < GetNumActiveLights(); i++) {
 		mat4 model = mat4(1);
 		model = glm::translate(model, lightPositions->at(i));
 		model = glm::scale(model, vec3(0.5f));
@@ -460,8 +482,8 @@ void DrawLightBoxes(Shader shader, vector<vec3>* lightPositions, int numLights) 
 	}
 }
 // ARRAY
-void DrawLightBoxes(Shader shader, vec3* lightPositions, int numLights) {
-	for (unsigned int i = 0; i < numLights; i++) {
+void DrawLightBoxes(Shader shader, vec3* lightPositions) {
+	for (unsigned int i = 0; i < GetNumActiveLights(); i++) {
 		mat4 model = mat4(1);
 		model = glm::translate(model, lightPositions[i]);
 		model = glm::scale(model, vec3(0.5f));
@@ -555,6 +577,7 @@ bool toggleLightingWindow = false;
 bool togglePostProcessingWindow = false;
 bool toggleSceneWindow = false;
 bool toggleBoltControlWindow = false;
+bool toggleTimersWindw = false;
 // GUI:
 void RenderImGui(LightManager* lm, PerformanceManager* pm) {
 	ImGui_ImplOpenGL3_NewFrame();
@@ -578,6 +601,9 @@ void RenderImGui(LightManager* lm, PerformanceManager* pm) {
 	if (ImGui::Button("Scene")) {
 		toggleSceneWindow = !toggleSceneWindow;
 	}
+	if (ImGui::Button("Timers")) {
+		toggleTimersWindw = !toggleTimersWindw;
+	}
 	ImGui::End();
 
 
@@ -593,6 +619,11 @@ void RenderImGui(LightManager* lm, PerformanceManager* pm) {
 	if (toggleBoltControlWindow)
 		BoltControlGUI(pm);
 
+	if (toggleTimersWindw)
+		pm->TimersGUI();
+
+	pm->PerformanceGUI();
+
 	ImGui::Render();
 	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 }
@@ -601,7 +632,7 @@ void BoltControlGUI(PerformanceManager* pm) {
 	ImGui::Begin("Bolt Control");
 
 	ImGui::Text("Methods:");
-	if (ImGui::Combo("##", &methodChoice, methodNames, 2)) {
+	if (ImGui::Combo("##", &methodChoice, methodNames, 3)) {
 		SetMethod(methodChoice);
 	}
 
@@ -624,21 +655,21 @@ void PostProcessingGUI() {
 	ImGui::Begin("Post Processing");
 
 	if (ImGui::CollapsingHeader("Bloom")) {
-		ImGui::Checkbox("Enabled", &bloom);
 		ImGui::Text("Amount:");
-		ImGui::SliderInt("", &amount, 0, 15);
+		ImGui::SliderInt("", &amount, 0, 20);
+		ImGui::Checkbox("Enabled", &bloom);
 	}
 
 	if (ImGui::CollapsingHeader("Gamma Correction")) {
-		ImGui::Checkbox("Enabled", &gammaCorrectionEnabled);
 		ImGui::Text("Gamma:");
 		ImGui::SliderFloat("##", &gamma, 0.1f, 5.0f);
+		ImGui::Checkbox("##Enabled", &gammaCorrectionEnabled);
 	}
 
 	if (ImGui::CollapsingHeader("Exposre")) {
-		ImGui::Checkbox("Enabled##", &exposureEnabled);
 		ImGui::Text("Exposure:");
-		ImGui::SliderFloat("###", &exposure, 0.1f, 100);
+		ImGui::SliderFloat("###", &exposure, 0.1f, 30);
+		ImGui::Checkbox("###Enabled", &exposureEnabled);
 	}
 	
 	ImGui::End();
@@ -658,7 +689,7 @@ GLFWwindow* CreateWindow() {
 		return NULL;
 	}
 
-	// turn off Vsyinc
+	// turn off Vsync
 	glfwSwapInterval(0);
 
 	return window;

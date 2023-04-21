@@ -8,21 +8,28 @@
 #include "LightningPatterns.h"
 
 // Functions
-void DefineBoltLines(LineBoltSegment* lboltPtr, std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr);
-void DefineBoltLines(vector<LineBoltSegment>* lboltPtr, vector<pair<vec3, vec3>>* lightningPatternPtr);
+void DefineBoltLines(LineBoltSegment* lboltPtr, int numActiveSegments, 
+	std::shared_ptr<glm::vec3[numSegmentsInPattern]> patternPtr);
+void DefineBoltLines(vector<LineBoltSegment>* lboltPtr, 
+	vector<pair<vec3, vec3>>* patternPtr);
 
-void PositionBoltPointLights(vec3* lightPositionsPtr,
-	std::shared_ptr<glm::vec3[numSegmentsInPattern]> lightningPatternPtr);
+void PositionBoltPointLights(vec3* lightPositionsPtr, int numActiveSegments,
+	std::shared_ptr<glm::vec3[numSegmentsInPattern]> patternPtr);
 void PositionBoltPointLights(vector<vec3>* lightPositionsPtr,
-	vector<pair<vec3, vec3>>* lightningPatternPtr);
+	vector<pair<vec3, vec3>>* patternPtr);
 
+// DYNAMIC
 void NewBolt(vector<LineBoltSegment>* segmentsPtr, vector<vec3>* lightsPtr,
-	vec3 startPosition, vector<pair<vec3, vec3>>* lightningPatternPtr);
+	vec3 startPosition, vector<pair<vec3, vec3>>* patternPtr);
+// STATIC
 void NewBolt(LineBoltSegment* segmentsPtr, vec3* lightsPtr, vec3 startPosition,
-	std::shared_ptr<vec3[numSegmentsInPattern]> lightningPatternPtr);
+	std::shared_ptr<vec3[numSegmentsInPattern]> patternPtr);
 
+// Getters / Setters
 int GetLightPerSegment();
 int GetCurrentMethod();
+int GetNumActiveLights();
+int GetNumActiveSegments();
 
 void SetLightPerSegment(int lightPerSegment);
 void SetParticleSystemSeedSegment(vec3 seed);

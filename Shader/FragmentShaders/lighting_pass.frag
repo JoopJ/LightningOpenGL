@@ -11,7 +11,7 @@ uniform sampler2D gAlbedoSpec;
 
 uniform samplerCubeArray depthMapArray;
 
-const int MAX_NUM_LIGHTS = 100;
+const int MAX_NUM_LIGHTS = 300;
 uniform vec3 lightPositions[MAX_NUM_LIGHTS];    // light positions and depth cubemaps
 uniform vec3 viewPos;
 uniform float far_plane;

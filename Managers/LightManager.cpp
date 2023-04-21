@@ -5,10 +5,11 @@ LightManager::LightManager()
 	SetupFBOandTexture();
 
 	// default values
+	lightPositions.resize(MAX_POINT_LIGHTS);
 	lightColor = vec3(1.0f, 1.0f, 1.0f);
 	near_plane = 1;
 	far_plane = 150;
-	numLights = 0;
+	numActiveLights = 0;
 	attenuationChoice = 8;
 	vec3 atten = attenuationOptions[attenuationChoice];
 	attenuationRadius = atten.x;
@@ -51,30 +52,31 @@ void LightManager::SetupFBOandTexture() {
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
-// VECTOR
-void LightManager::SetLightPositions(vector<vec3>* _lightPositions, int _numLights)
-{
-	if (_numLights > MAX_POINT_LIGHTS) {
-		std::cout << "ERROR: LightManager::SetLightPositions: _numLights > MAX_POINT_LIGHTS" << std::endl;
+// DYNAMIC
+void LightManager::SetLightPositions(vector<vec3>* _lightPositions) {
+
+	if (GetNumActiveLights() > MAX_POINT_LIGHTS) {
+		std::cout << "ERROR::LightManager::SetLightPositions::DYNAMIC:: numLightsActive > MAX_POINT_LIGHTS" << std::endl;
 		return;
 	}
-	numLights = _numLights;
-	lightPositions.clear();
-	for (int i = 0; i < numLights; i++) {
-		lightPositions.push_back(_lightPositions->at(i));
+
+	numActiveLights	= GetNumActiveLights();
+	for (int i = 0; i < numActiveLights; i++) {
+		lightPositions.at(i) = (_lightPositions->at(i));
 	}
 }
 
-// ARRAY
+// STATIC
 void LightManager::SetLightPositions(vec3* _lightPositions) {
-	if (numSegmentsInPattern > MAX_POINT_LIGHTS) {
-		std::cout << "ERROR: LightManager::SetLightPositions: _numLights > MAX_POINT_LIGHTS" << std::endl;
+
+	if (GetNumActiveLights() > MAX_POINT_LIGHTS) {
+		std::cout << "ERROR::LightManager::SetLightPositions::STATIC:: numSegmentsInPattern > MAX_POINT_LIGHTS" << std::endl;
 		return;
 	}
-	numLights = numSegmentsInPattern;
-	lightPositions.clear();
-	for (int i = 0; i < numLights; i++) {
-		lightPositions.push_back(_lightPositions[i]);
+
+	numActiveLights = GetNumActiveLights();
+	for (int i = 0; i < numActiveLights; i++) {
+		lightPositions[i] = (_lightPositions[i]);
 	}
 }
 
@@ -87,7 +89,7 @@ void LightManager::RenderDepthMaps() {
 	depthShader->SetFloat("far_plane", far_plane); // far_plane is constant for all lights
 
 	vector<mat4> shadowTransforms;
-	for (unsigned int light = 0; light < numLights; light++) {
+	for (unsigned int light = 0; light < numActiveLights; light++) {
 		// For each light...
 		shadowTransforms = GenerateShadowTransforms(lightPositions[light]);
 		for (unsigned int i = 0; i < 6; i++) {
@@ -110,9 +112,9 @@ void LightManager::SetLightingPassUniforms(Shader* shader) {
 	shader->SetFloat("Quadratic", quadratic);
 	shader->SetFloat("far_plane", far_plane);
 	shader->SetVec3("lightColor", lightColor);
-	shader->SetInt("numLightsActive", numLights);
+	shader->SetInt("numLightsActive", numActiveLights);
 	// Set the light positions
-	for (int i = 0; i < numLights; i++) {
+	for (int i = 0; i < numActiveLights; i++) {
 		shader->SetVec3("lightPositions[" + std::to_string(i) + "]", lightPositions[i]);
 	}
 }

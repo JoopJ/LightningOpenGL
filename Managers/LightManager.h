@@ -10,6 +10,7 @@
 #include "../Renderer.h"
 #include "../include/imgui/imgui.h"
 #include "../BoltGeneration/LightningPatterns.h"
+#include "../BoltGeneration/BoltSetup.h"
 
 using std::vector;
 using glm::vec3;
@@ -20,7 +21,7 @@ class LightManager {
 public:
 	LightManager();
 	void Init(Shader* _depthShader);
-	void SetLightPositions(vector<vec3>* _lightPositions, int _numLights);
+	void SetLightPositions(vector<vec3>* _lightPositions);
 	void SetLightPositions(vec3* _lightPositions);
 	void RenderDepthMaps();
 	void BindCubeMapArray();
@@ -35,7 +36,7 @@ private:
 	mat4 shadowProj;
 
 	vector<vec3> lightPositions;
-	int numLights;
+	int numActiveLights;
 
 	// Constants
 	const unsigned int SHADOW_WIDTH = 1024, SHADOW_HEIGHT = 1024;
@@ -44,7 +45,7 @@ private:
 	// MAX_POINT_LIGHTS is used to set the size of the depth cubemap array texture, 
 	// should be equal to MAX_NUM_LIGHTS in lighting_pass.frag, which sets the size 
 	// of the array of light positions.
-	const unsigned int MAX_POINT_LIGHTS = 100;
+	const unsigned int MAX_POINT_LIGHTS = 300;
 
 	// Specific options for light attenuation
 	const vec3 attenuationOptions[12] = {
