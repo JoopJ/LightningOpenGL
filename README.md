@@ -28,12 +28,12 @@ Esc - Exit
 GUI - gui windows can be toggled throug the Window Menu by pressing the buttons.
 
 ### TODO:
-	
-- L-System
 
 - Branching
 
-- Performance Measuring GUI
+- Make a more interesting Scene
+
+- Clean up GUI
 
 Extra:
 - Blur Optimization
