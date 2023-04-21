@@ -38,4 +38,4 @@ GUI - gui windows can be toggled throug the Window Menu by pressing the buttons.
 Extra:
 - Blur Optimization
 
-- Deferred Rendering for large number of lights from bolt
+- Light Volumes
