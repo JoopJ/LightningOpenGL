@@ -27,8 +27,6 @@ int GenerateRandomPositionsPattern(vec3 start,
 	std::shared_ptr<vec3[numSegmentsInPattern]> patternPtr);
 vector<pair<vec3, vec3>>* GenerateRandomPositionsPattern(vec3 start,
 	vector<pair<vec3, vec3>>* patternPtr);
-
-vec3 NextPoint(vec3 point);
 // ----------------------
 
 // Particle System ------
@@ -36,10 +34,6 @@ int GenerateParticleSystemPattern(vec3 start, vec3 seed,
 	std::shared_ptr<vec3[numSegmentsInPattern]> patternPtr);
 vector<pair<vec3, vec3>>* GenerateParticleSystemPattern(vec3 start, vec3 seed,
 	vector<pair<vec3, vec3>>* patternPtr);
-
-quaternion ConvertRotationQuaternion(vec3 seed, float angle);
-pair<vec3, vec3> GetRotationAxis(vec3 seed);
-vec3 RotatePointAboutSeed(vec3 point, pair<vec3, vec3> seedPerpAxis);
 // ----------------------
 
 // L-System -------------
@@ -47,14 +41,6 @@ int GenerateLSystemPattern(vec3 start,
 	std::shared_ptr<vec3[numSegmentsInPattern]> patternPtr);
 vector<pair<vec3, vec3>>* GenerateLSystemPattern(vec3 start,
 	vector<pair<vec3, vec3>>* patternPtr);
-
-void LSystemSubDivide(vec3 start, vec3 end, int startIndex, int endIndex, int detail,
-	float maxDisplacement, std::shared_ptr<vec3[numSegmentsInPattern]> patternPtr);
-void LSystemSubDivide(vec3 start, vec3 end, int startIndex, int endIndex, int detail,
-	float maxDisplacement, vector<vec3>* patternPtr);
-vec3 GetMidPnt(vec3 start, vec3 end, int maxDisplacement);
-vec3 GetPerpAxis(vec3 axis);
-float GetLSystemDetail();
 // ----------------------
 
 // GUI

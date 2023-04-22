@@ -18,11 +18,9 @@ void RenderRandomBoxes(Shader shader);
 void RenderAlcove(Shader shader);
 void RenderSlab(Shader shader, mat4 model);
 
-
-// Render Scene
 // Only Sets the model matrix, other matrices should already be set
+
 void RenderScene(const Shader& shader) {
-	mat4 model = mat4(1.0f);
 
 	//RenderRoomCube(shader, 20, vec3(0, 5, 0));
 	//RenderRandomBoxes(shader);
@@ -84,9 +82,9 @@ void RenderRandomBoxes(Shader shader) {
 	if (!boxPositionsSet) { // set random box positions
 		for (int box = 0; box < numBoxes; box++) {
 			// get random positions
-			float x = (rand() % (range * 2)) - range;
-			float y = (rand() % (range * 2)) - range;
-			float z = (rand() % (range * 2)) - range;
+			float x = float((rand() % (range * 2)) - range);
+			float y = float((rand() % (range * 2)) - range);
+			float z = float((rand() % (range * 2)) - range);
 			boxPositions[box] = vec3(x, y, z);
 		}
 		boxPositionsSet = true;

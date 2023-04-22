@@ -20,14 +20,11 @@ The STATIC option is the default, to use the DYNAMIC option, set the DYNAMIC_BOL
 enum Method { Random, Particle, LSystem };
 Method methods[3] = { Random, Particle, LSystem };
 int currentMethod = 0;
-float lightPerSegRandom = 0.75f;
-float lightPerSegParticle = 0.75f;
-float lightPerSegLSystem = 0.5f;
-// scales the number of lights per segment down as detail increases
-float lightPerSegLSystemScalar = 0.5f;
 
-// Variables
-float lightPerSeg;
+// Number of Lights variables
+int numLights = 50;	// controls the (max) number of lights
+float lightPerSeg = 1;
+
 int numActiveLights;
 int numActiveSegments;
 
@@ -50,9 +47,17 @@ void DefineBoltLines(vector<LineBoltSegment>* lboltPtr,
 	vector<pair<vec3, vec3>>* patternPtr) {
 
 	lboltPtr->clear();
+	lboltPtr->reserve(patternPtr->size());
+
+	for (int i = 0; i < patternPtr->size(); i++) {
+		lboltPtr->push_back(LineBoltSegment(patternPtr->at(i).first, 
+			patternPtr->at(i).second));
+	}
+	/*
 	for (int i = 0; i < patternPtr->size(); i++) {
 		lboltPtr->emplace_back(patternPtr->at(i).first, patternPtr->at(i).second);
 	}
+	*/
 }
 // -----------
 
@@ -66,22 +71,32 @@ void DefineBoltLines(vector<LineBoltSegment>* lboltPtr,
 void PositionBoltPointLights(vec3* lightPositionsPtr, int numActiveSegments,
 	std::shared_ptr<glm::vec3[numSegmentsInPattern]> patternPtr) {
 
-	unsigned int lighPosIndex = 0;
+	// scale lightsPerSeg based on number of segments
+	lightPerSeg = float(numLights / numActiveSegments);
+
+	int lightPosIndex = 0;
 	float count = 0;
 
 	for (int seg = 0; seg < numActiveSegments - 1; seg++) {
 		count += lightPerSeg;
 
-		if (count > 1) {
-			// position light in the middle of the segment
-			vec3 segDir = (patternPtr[seg + 1] - patternPtr[seg]);
-			*(lightPositionsPtr + lighPosIndex) = patternPtr[seg] + segDir * 0.5f;
-			lighPosIndex++;
-			count -= 1;
+		if (count >= 1) {
+
+			int lightCount = int(count);
+
+			// positions lights equidistance along the segment
+			vec3 segDir = (patternPtr[seg + 1] - patternPtr[seg]) / float(lightCount+1);
+
+			for (int light = 0; light < lightCount; light++) {
+				*(lightPositionsPtr + lightPosIndex + light) = 
+					patternPtr[seg] + segDir * float(light + 1);
+			}
+			lightPosIndex += lightCount;
+			count -= lightCount;
 		};
 	}
 
-	numActiveLights = lighPosIndex;
+	numActiveLights = lightPosIndex;
 }
 
 // DYNAMIC BOLT
@@ -91,18 +106,28 @@ void PositionBoltPointLights(vector<vec3>* lightPositionsPtr,
 	lightPositionsPtr->clear();
 	numActiveLights = 0;
 
+	// scale lightsPerSeg based on number of segments
+	lightPerSeg = numLights / (float)patternPtr->size();
+
 	float count = 0;
 
-	for (int seg = 0; seg < patternPtr->size(); seg++) {
+	for (int seg = 0; seg < patternPtr->size()-1; seg++) {
 		count += lightPerSeg;
 
 		if (count >= 1) {
-			// position light in the middle of the segment
-			vec3 segDir = (patternPtr->at(seg).second - patternPtr->at(seg).first);
-			lightPositionsPtr->push_back(patternPtr->at(seg).first + segDir * 0.5f);
 
-			numActiveLights++;
-			count -= 1;
+			vec3 segDir = (patternPtr->at(seg).second - patternPtr->at(seg).first);
+
+			// position lights equidistance along the segment
+			int lightCount = int(count);
+			vec3 step = segDir / float(lightCount+1);
+
+			for (float i = 0; i < lightCount; i++) {
+				lightPositionsPtr->push_back(patternPtr->at(seg).first + (step * (i+1)));
+			}
+
+			numActiveLights += lightCount;
+			count -= lightCount;
 		};
 	}
 }
@@ -164,7 +189,7 @@ void NewBolt(LineBoltSegment* segmentsPtr, vec3* lightsPtr, vec3 startPosition,
 // ---------
 
 // Getters
-int GetLightPerSegment() {
+float GetLightPerSegment() {
 	return lightPerSeg;
 }
 
@@ -181,8 +206,8 @@ int GetNumActiveSegments() {
 }
 
 // Setters
-void SetLightPerSegment(int lightPerSegment) {
-	lightPerSeg = lightPerSegment;
+void SetNumLights(int num) {
+	numLights = num;
 }
 
 void SetParticleSystemSeedSegment(vec3 seed) {
@@ -191,22 +216,4 @@ void SetParticleSystemSeedSegment(vec3 seed) {
 
 void SetMethod(int m) {
 	currentMethod = m;
-
-	// Set the number of lights per segment based on the method
-	switch (m) {
-		case 0:
-			lightPerSeg = lightPerSegRandom;
-			break;
-		case 1:
-			lightPerSeg = lightPerSegParticle;
-			break;
-		case 2:
-			lightPerSeg = lightPerSegLSystem;
-
-			// scale the number of lights per segment based on the LSystem detail
-			if (GetLSystemDetail() > 3) {
-				lightPerSeg *= pow(lightPerSegLSystemScalar, (GetLSystemDetail() - 3));
-			}
-			break;
-	}
 }

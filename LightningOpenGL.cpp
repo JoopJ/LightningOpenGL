@@ -34,8 +34,6 @@ ImGui is used for the GUI which allows editting of various variables used to gen
 
 // other files
 #include "BoltGeneration/LineBoltSegment.h"
-#include "BoltGeneration/TextureBolt.h"
-#include "BoltGeneration/TriangleBoltSegment.h"
 #include "BoltGeneration/LightningPatterns.h"
 #include "BoltGeneration/BoltSetup.h"
 #include "Shader/Shader.h"
@@ -77,14 +75,14 @@ bool gammaCorrectionEnabled = true;
 bool exposureEnabled = true;
 
 // Array Type
-bool DYNAMIC_BOLT = true;
+bool DYNAMIC_BOLT = false;
 
 // Method Choice
 int methodChoice = 2; // 0 = random, 1 = particle system, 2 = l-system
 const char* methodNames[3] = { "Random Positions", "Particle System", "L-System"};
 
 // Debuging
-bool lightBoxesEnable = false;
+bool lightBoxesEnable = true;
 
 // function prototypes
 // MVP Setters
@@ -112,7 +110,7 @@ void BoltControlGUI(PerformanceManager* pm);
 int main() {
 	// Initial Configurations and Window Creation
 	// -------------------------
-	std::srand(std::time(NULL));
+	std::srand(time(0));
 	SetWidthAndHeight(SCR_WIDTH, SCR_HEIGHT);
 	ConfigureWindow();
 	GLFWwindow* window = CreateWindow();
@@ -212,14 +210,13 @@ int main() {
 	PerformanceManager performanceManager;
 	//performanceManager.SetTimerPerSecondOutput(FRAME, true);
 	//performanceManager.SetTimerAvgOutput(FRAME, true);
-	performanceManager.SetTimerAvgTimeInterval(FRAME, 1.0);
+	//performanceManager.SetTimerAvgTimeInterval(FRAME, 1.0);
 	// -------------------------
 
 	// Testing ---------
 	// mat4 lightRotateMat4 = glm::rotate(mat4(2.0), glm::radians(0.01f), vec3(0, 1, 0)); // used for rotating the lights
 	vector<vec3> lightPositions;
 	vec3 lightPos = vec3(0, 10, 0);
-	vec3 newPos;
 	// -----------------
 
 	// Bolt Objects Definition
@@ -433,6 +430,7 @@ int main() {
 
 		performanceManager.UpdateTimer(BLEND);
 
+		performanceManager.UpdateTimer(FRAME);
 		// 6. GUI
 		// -----------------
 		RenderImGui(&lightManager, &performanceManager);
@@ -441,8 +439,6 @@ int main() {
 		// glfw: swap buffers and poll IO events
 		glfwSwapBuffers(window);
 		glfwPollEvents();
-
-		performanceManager.UpdateTimer(FRAME);
 	}
 
 	// imgui: shutdown and cleanup
@@ -473,17 +469,19 @@ void DrawLineBolt(vector<LineBoltSegment>* lboltPtr) {
 // Light Boxes
 // VECTOR
 void DrawLightBoxes(Shader shader, vector<vec3>* lightPositions) {
-	for (unsigned int i = 0; i < GetNumActiveLights(); i++) {
+
+	for (int i = 0; i < GetNumActiveLights(); i++) {
 		mat4 model = mat4(1);
 		model = glm::translate(model, lightPositions->at(i));
 		model = glm::scale(model, vec3(0.5f));
 		shader.SetMat4("model", model);
 		RenderCube();
 	}
+
 }
 // ARRAY
 void DrawLightBoxes(Shader shader, vec3* lightPositions) {
-	for (unsigned int i = 0; i < GetNumActiveLights(); i++) {
+	for (int i = 0; i < GetNumActiveLights(); i++) {
 		mat4 model = mat4(1);
 		model = glm::translate(model, lightPositions[i]);
 		model = glm::scale(model, vec3(0.5f));
@@ -579,7 +577,7 @@ bool toggleSceneWindow = false;
 bool toggleBoltControlWindow = false;
 bool toggleTimersWindw = false;
 // GUI:
-void RenderImGui(LightManager* lm, PerformanceManager* pm) {
+void RenderImGui(LightManager *lm, PerformanceManager *pm) {
 	ImGui_ImplOpenGL3_NewFrame();
 	ImGui_ImplGlfw_NewFrame();
 	ImGui::NewFrame();;
@@ -606,6 +604,9 @@ void RenderImGui(LightManager* lm, PerformanceManager* pm) {
 	}
 	ImGui::End();
 
+	// Windows
+	if (toggleBoltControlWindow)
+		BoltControlGUI(pm);
 
 	if (toggleBoltGenWindow)
 		BoltGenerationGUI(methodChoice);
@@ -616,12 +617,10 @@ void RenderImGui(LightManager* lm, PerformanceManager* pm) {
 	if (togglePostProcessingWindow)
 		PostProcessingGUI();
 
-	if (toggleBoltControlWindow)
-		BoltControlGUI(pm);
-
 	if (toggleTimersWindw)
 		pm->TimersGUI();
 
+	// Performance
 	pm->PerformanceGUI();
 
 	ImGui::Render();

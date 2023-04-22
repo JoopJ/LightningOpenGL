@@ -17,6 +17,8 @@ private:
 	unsigned int VBO, VAO;
 	float vertices[6];
 
+	const char* id = "Unchanged";
+
 public:
 	LineBoltSegment(); // called when Line is created in array, Setup should be called afterwards
 	LineBoltSegment(glm::vec3 start, glm::vec3 end); // Line Constructor

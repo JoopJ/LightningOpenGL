@@ -4,7 +4,6 @@
 #include <vector>
 
 #include "LineBoltSegment.h"
-#include "TriangleBoltSegment.h"
 #include "LightningPatterns.h"
 
 // Functions
@@ -26,11 +25,11 @@ void NewBolt(LineBoltSegment* segmentsPtr, vec3* lightsPtr, vec3 startPosition,
 	std::shared_ptr<vec3[numSegmentsInPattern]> patternPtr);
 
 // Getters / Setters
-int GetLightPerSegment();
+float GetLightPerSegment();
 int GetCurrentMethod();
 int GetNumActiveLights();
 int GetNumActiveSegments();
 
-void SetLightPerSegment(int lightPerSegment);
+void SetNumLights(int num);
 void SetParticleSystemSeedSegment(vec3 seed);
 void SetMethod(int m);

@@ -14,6 +14,7 @@ LineBoltSegment::LineBoltSegment(vec3 start, vec3 end) {
 
 
 void LineBoltSegment::Setup(vec3 start, vec3 end) {
+	id = "Set";
 	float verticesSet[6] = {
 		start.x, start.y, start.z,
 		end.x, end.y, end.z,
@@ -21,8 +22,8 @@ void LineBoltSegment::Setup(vec3 start, vec3 end) {
 	memcpy(vertices, verticesSet, sizeof(verticesSet));
 
 	// delete old buffers if they exist
-	glDeleteVertexArrays(1, &VAO);
-	glDeleteBuffers(1, &VBO);
+	//glDeleteVertexArrays(1, &VAO);
+	//glDeleteBuffers(1, &VBO);
 
 	// genereate, bind and initialize buffer's for bolt rendering
 	glGenVertexArrays(1, &VAO);
