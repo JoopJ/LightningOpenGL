@@ -27,11 +27,14 @@ int LSystemBranchChance = 5;
 // Private Functions --------------------------------
 
 // General:
-quaternion ConvertRotationQuaternion(vec3 seed, float angle) {
+quaternion ConvertRotationQuaternion(vec3 seed, float theta) {
 	// Returns a quaternion that rotates about the given seed vector
-	// by the given angle (in radians).
+	// by the given angle theta (in radians).
 
-	return quaternion(cos(angle / 2), seed.x * sin(angle / 2), seed.y * sin(angle / 2), seed.z * sin(angle / 2));
+	//return quaternion(cos(theta / 2), seed.x * sin(theta / 2),
+	//	seed.y * sin(theta / 2), seed.z * sin(theta / 2));
+	return quaternion(seed.x * sin(theta / 2), seed.y * sin(theta / 2),
+		seed.z * sin(theta / 2), cos(theta / 2));
 }
 bool RollBranchChance(int branchChance) {
 	// Given an int in the range [0, 100], rolls a random number between 0 and 100
@@ -110,27 +113,28 @@ vec3 GetPerpAxis(vec3 axis) {
 	// the original axis.
 
 	// get perpendicular axis
-	vec3 perp = normalize(cross(axis, vec3(axis.x, axis.z, axis.y)));
+	vec3 perp = cross(axis, vec3(axis.x, -axis.z, axis.y));
 
 	// get random angle
 	float radian = glm::radians((float)(rand() % 360));
 
-	// convert perp to quaternion
-	quaternion p = quaternion(perp.x, perp.y, perp.z, 0);
-
 	// create rotation quaternion
 	quaternion r = ConvertRotationQuaternion(axis, radian);
+	//r.fromAngleAxis(radian, irr::core::vector3df(axis.x, axis.y, axis.z));
+
+	// convert perp to quaternion
+	quaternion p = quaternion(perp.x, perp.y, perp.z, 0);
 
 	// apply rotation
 	p = r * p * r.makeInverse();
 
 	return normalize(vec3(p.X, p.Y, p.Z));
 }
-vec3 GetMidPnt(vec3 start, vec3 end, int maxDisplacement) {
+vec3 GetMidPnt(vec3 start, vec3 end, float maxDisplacement) {
 	vec3 mid = (start + end) / 2.0f;
 
 	// get perpendicular axis
-	vec3 perp = GetPerpAxis(end - start);
+	vec3 perp = GetPerpAxis(normalize(end - start));
 
 	// displace mid point along the perpendicular axis by
 	// a random magnitude between 0 and maxDisplacement.
@@ -213,6 +217,9 @@ void ParticleSystemBranch(vec3 start, vec3 seed, int size, vector<pair<vec3, vec
 		newPointMove = RotatePointAboutSeed(newPointMove, seedPerpAxis);
 		newPoint = prevEnd + newPointMove;
 	}
+}
+void LSystemBranch(vec3 start, int detail, vector<pair<vec3, vec3>>* patternPtr) {
+	
 }
 // --------------------------------------------------
 

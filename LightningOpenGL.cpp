@@ -65,6 +65,7 @@ float gamma = 2.2f;
 float boltAlpha = 1.0f;
 vec3 boltColor = vec3(1.0f, 1.0f, 0.0f);	// Yellow
 vec3 cubeLightColor = vec3(1);				// White
+bool newBolt = true; // signals to generate a new bolt
 
 // toggles
 bool shadowsEnabled = true;
@@ -95,7 +96,7 @@ void DrawLightBoxes(Shader shader, vector<vec3>* lightPositions);
 void DrawLightBoxes(Shader shader, vec3* lightPositions);
 // Input
 void ProcessMiscInput(GLFWwindow* window, bool* firstButtonPress);
-bool ProcessLightningControlInput(GLFWwindow* window);
+void ProcessLightningControlInput(GLFWwindow* window);
 // Config
 void ConfigureWindow();
 GLFWwindow* CreateWindow();
@@ -108,6 +109,7 @@ void BoltControlGUI(PerformanceManager* pm);
 
 
 int main() {
+	std::cout << "LightningOpenGL" << std::endl;
 	// Initial Configurations and Window Creation
 	// -------------------------
 	std::srand(time(0));
@@ -236,6 +238,7 @@ int main() {
 	// Set the pattern generation method
 	SetMethod(methodChoice);
 
+	/*
 	// Generate the pattern and set the line segment positions and point light positions
 	if (DYNAMIC_BOLT) {
 		// Dynamic Bolt
@@ -252,6 +255,7 @@ int main() {
 		lightManager.SetLightPositions(staticPointLightPositionsPtr);
 	}
 	// ---------------
+	*/
 
 	// G-Buffer -------
 	G_Buffer gBuffer(SCR_WIDTH, SCR_HEIGHT);
@@ -261,6 +265,7 @@ int main() {
 	FboManager fboManager(SCR_WIDTH, SCR_HEIGHT);
 	// ----------------
 
+	std::cout << "Starting Render Loop" << std::endl;
 	// render loop
 	while (!glfwWindowShouldClose(window)) {
 		performanceManager.StartTimer(FRAME);
@@ -281,9 +286,11 @@ int main() {
 		// -----------------------
 		ProcessKeyboardInput(window);
 		ProcessMiscInput(window, &firstMouseKeyPress);
+		ProcessLightningControlInput(window);
+		// --------------------------
 
-		if (ProcessLightningControlInput(window)) {
-			// New Bolt
+		// New Bolt
+		if (newBolt) {
 			if (DYNAMIC_BOLT) {
 				// Dynamic Bolt
 				NewBolt(dynamicLineSegmentsPtr, dynamicPointLightPositionsPtr,
@@ -298,8 +305,8 @@ int main() {
 
 				lightManager.SetLightPositions(staticPointLightPositionsPtr);
 			}
+			newBolt = false;
 		}
-		// --------------------------
 
 		// MVP
 		mat4 model = mat4(1.0f);
@@ -543,17 +550,16 @@ void ProcessMiscInput(GLFWwindow* window, bool* firstButtonPress) {
 bool spaceHeld = false;
 // ProcessLightningControlInput, process inputs relating to control of the lightning.
 // returns true when a new strike is initiated, false otherwise.
-bool ProcessLightningControlInput(GLFWwindow* window) {
+void ProcessLightningControlInput(GLFWwindow* window) {
 	// recalculate lines
 	if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS && !spaceHeld) {
 		// std::cout << "New Strike" << std::endl;
 		spaceHeld = true;
-		return true;
+		newBolt = true;
 	}
 	else if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_RELEASE) {
 		spaceHeld = false;
 	}
-	return false;
 }
 // -------------------
 
@@ -638,6 +644,7 @@ void BoltControlGUI(PerformanceManager* pm) {
 	ImGui::Text("Storage Type:");
 	if (ImGui::Button(DYNAMIC_BOLT ? "Dynamic" : "Static")) {
 		DYNAMIC_BOLT = !DYNAMIC_BOLT;
+		newBolt = true;
 	}
 	ImGui::Text("Pattern Info:");
 	if (DYNAMIC_BOLT) {
