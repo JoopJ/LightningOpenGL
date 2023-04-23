@@ -35,7 +35,7 @@ void PerformanceManager::PerformanceGUI() {
 
 	ImGui::Text("Point Lights: %d", GetNumActiveLights());
 
-	ImGui::Text("Lights Per Seg: %f", GetLightPerSegment());
+	ImGui::Text("Lights Per Seg: %.5f", GetLightPerSegment());
 
 	ImGui::End();
 }

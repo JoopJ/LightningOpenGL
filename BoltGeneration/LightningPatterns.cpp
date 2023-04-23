@@ -348,7 +348,6 @@ int GenerateLSystemPattern(vec3 start,
 	LSystemSubDivide(start, LSystemEndPosition, startIndex, endIndex, 
 		LSystemDetail, startingMaxDisplacement, patternPtr);
 
-	// variable size
 	return size;
 }
 //DYNAMIC BOLT

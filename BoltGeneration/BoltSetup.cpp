@@ -72,7 +72,7 @@ void PositionBoltPointLights(vec3* lightPositionsPtr, int numActiveSegments,
 	std::shared_ptr<glm::vec3[numSegmentsInPattern]> patternPtr) {
 
 	// scale lightsPerSeg based on number of segments
-	lightPerSeg = float(numLights / numActiveSegments);
+	lightPerSeg = float(numLights) / float(numActiveSegments);
 
 	int lightPosIndex = 0;
 	float count = 0;
