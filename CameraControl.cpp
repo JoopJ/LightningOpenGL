@@ -1,7 +1,10 @@
 #include "CameraControl.h"
 
 // camera settings
-glm::vec3 cameraPos = glm::vec3(30.0f, 15.0f, 0.0f);
+float cameraSpeedNormal = 9.0f;
+float cameraSpeedFast = 18.0f;
+
+glm::vec3 cameraPos = glm::vec3(10.0f, 5.0f, 0.0f);
 glm::vec3 cameraFront = glm::vec3(-1.0f, 0.0f, 0.0f);
 glm::vec3 cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);
 
@@ -76,9 +79,9 @@ void ProcessKeyboardInput(GLFWwindow* window) {
 		glfwSetWindowShouldClose(window, true);
 
 	// directional control, based on camera's front and up vectors
-	float cameraSpeed = static_cast<float>(9.5 * deltaTime);
+	float cameraSpeed = static_cast<float>(cameraSpeedNormal * deltaTime);
 	if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS)
-		cameraSpeed = static_cast<float>(19.5 * deltaTime);
+		cameraSpeed = static_cast<float>(cameraSpeedFast * deltaTime);
 
 	if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
 		cameraPos += cameraSpeed * cameraFront;
