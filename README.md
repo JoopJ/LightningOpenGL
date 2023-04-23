@@ -29,12 +29,10 @@ GUI - gui windows can be toggled throug the Window Menu by pressing the buttons.
 
 ### TODO:
 
-- Branching
+- Make a more interesting Scene
 
 - Normal Distribution for:
 	- Branch Length
-
-- Make a more interesting Scene
 
 - Clean up GUI
 
