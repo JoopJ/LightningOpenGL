@@ -405,10 +405,10 @@ void BoltGenerationGUI(int method) {
 	case 2:
 		ImGui::Text("L-System");
 		ImGui::Text("Max Displacement");
-		ImGui::InputFloat("##", &startingMaxDisplacement, 1, 10, "%.0f");
+		ImGui::InputFloat("##lsDisplacement", &startingMaxDisplacement, 1, 5, "%.0f");
 
 		ImGui::Text("Detail");
-		ImGui::InputInt("###", &LSystemDetail, 1, 5);
+		ImGui::InputInt("##lsDetail", &LSystemDetail, 1, 2);
 		break;
 	}
 
@@ -416,13 +416,13 @@ void BoltGenerationGUI(int method) {
 	ImGui::Text("Branch Chance");
 	switch (method) {
 	case 0:
-		ImGui::InputInt("###", &randomPositionsBranchChance, 1, 100);
+		ImGui::InputInt("##rpChance", &randomPositionsBranchChance, 1, 100);
 		break;
 	case 1:
-		ImGui::InputInt("###", &particleSystemBranchChance, 1, 100);
+		ImGui::InputInt("##psChace", &particleSystemBranchChance, 1, 100);
 		break;
 	case 2:
-		ImGui::InputInt("###", &LSystemBranchChance, 1, 100);
+		ImGui::InputInt("##lsChance", &LSystemBranchChance, 1, 100);
 		break;
 
 	}
