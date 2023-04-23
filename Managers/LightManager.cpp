@@ -136,32 +136,66 @@ void LightManager::UpdateShadowProjection() {
 	shadowProj = glm::perspective(glm::radians(90.0f), aspect, near_plane, far_plane);
 }
 
-void LightManager::LightingGUI(bool* lightBoxesEnable) {
-	ImGui::Begin("Lighting");
+bool LightManager::GetLightBoxesEnabled() {
+	return lightBoxesEnabled;
+}
 
-	if (ImGui::CollapsingHeader("Shadows")) {
-		ImGui::Text("Far Plane: %f", far_plane);
-		ImGui::SliderFloat("###", &far_plane, 1, 200);
+void LightManager::LightingTabGUI() {
+	ImGui::Text("Attenuation");
+	ImGui::Text("Radius: %d", attenuationRadius);
+	if (ImGui::SliderInt("##choice", &attenuationChoice, 0, 11)) {
+		vec3 atten = attenuationOptions[attenuationChoice];
+		attenuationRadius = atten.x;
+		linear = atten.y;
+		quadratic = atten.z;
 	}
 
-	if (ImGui::CollapsingHeader("Light")) {
+	ImGui::Separator();
+	ImGui::Text("Light Color");
+	ImGui::ColorEdit3("##color", (float*)&lightColor);
+}
 
-		ImGui::Text("Attenuation");
-		ImGui::Text("Radius: %d", attenuationRadius);
-		if (ImGui::SliderInt("##", &attenuationChoice, 0, 11)) {
-			vec3 atten = attenuationOptions[attenuationChoice];
-			attenuationRadius = atten.x;
-			linear = atten.y;
-			quadratic = atten.z;
+
+void LightManager::ShadowsTabGUI() {
+	ImGui::Text("Far Plane: "); ImGui::SameLine();
+	ImGui::SliderFloat("##farPlane", &far_plane, 1, 200);
+}
+
+void LightManager::LightsTabGUI() {
+	static int numLights = 15;
+
+	ImGui::Text("Number of Lights:"); ImGui::SameLine();
+	ImGui::Text("%d", numLights);  ImGui::SameLine();
+
+	ImGui::PushButtonRepeat(true);
+	if (ImGui::ArrowButton("##numLightsL", ImGuiDir_Up))
+		numLights++; SetNumLights(numLights); ImGui::SameLine();
+	if (ImGui::ArrowButton("##numLightsR", ImGuiDir_Down))
+		numLights--; SetNumLights(numLights);
+
+	ImGui::Separator();
+	if (ImGui::Button("Show Light Positions")) {
+		lightBoxesEnabled = !lightBoxesEnabled;
+	}
+}
+
+void LightManager::LightingGUI() {
+	ImGui::Begin("Lighting");
+
+	if (ImGui::BeginTabBar("Lighting")) {
+		if (ImGui::BeginTabItem("Lighting")) {
+			LightingTabGUI();
+			ImGui::EndTabItem();
 		}
-
-		ImGui::Text("Light Color");
-		ImGui::ColorEdit3("##", (float*)&lightColor);
-
-		ImGui::Text("Point Lights");
-		if (ImGui::Button("Show Light Positions")) {
-			*lightBoxesEnable = !*lightBoxesEnable;
+		if (ImGui::BeginTabItem("Shadows")) {
+			ShadowsTabGUI();
+			ImGui::EndTabItem();
 		}
+		if (ImGui::BeginTabItem("Lights")) {
+			LightsTabGUI();
+			ImGui::EndTabItem();
+		}
+		ImGui::EndTabBar();
 	}
 
 	ImGui::End();

@@ -23,6 +23,11 @@ int randomPositionsBranchChance = 5;
 int particleSystemBranchChance = 5;
 int LSystemBranchChance = 5;
 
+float LSystemBranchScaler = 0.7f;
+
+float LSystemBranchVariation = 0.5f;
+int LSystemBranchMinDetail = 4;
+
 // --------------------------------------------------
 // Private Functions --------------------------------
 
@@ -377,6 +382,101 @@ vector<pair<vec3, vec3>>* GenerateLSystemPattern(vec3 start,
 	for (int i = 0; i < size-1; i++) {
 		pair<vec3, vec3> seg = { patternPoints.at(i), patternPoints.at(i + 1) };
 		patternPtr->at(i) = seg;
+	}
+
+	return patternPtr;
+}
+
+vector<pair<vec3, vec3>>* GenerateLSystemPattern(vec3 _start,
+	vector<pair<vec3, vec3>>* patternPtr, bool x) {
+
+	patternPtr->clear();
+
+	// ping pong between two vectors
+	vector<pair<vec3, vec3>> segments1;
+	vector<pair<vec3, vec3>> segments2;
+
+	vector<pair<vec3, vec3>>* segmentsRead = &segments1;
+	vector<pair<vec3, vec3>>* segmentsWrite = &segments2;
+
+	// add the first segment
+	segmentsRead->push_back({ _start, LSystemEndPosition });
+
+	float maxDisplacement = startingMaxDisplacement;
+
+	for (int d = LSystemDetail; d > 0; d--) {
+
+		int numSegments = segmentsRead->size();
+		segmentsWrite->clear();
+
+		/*
+		std::cout << "Num Segs: " << numSegments << std::endl;
+
+		std::cout << "Read:" << std::endl;
+		for (int i = 0; i < segmentsRead->size(); i++) {
+			pair<vec3, vec3> seg = segmentsRead->at(i);
+			if (seg.first == seg.second) {
+				std::cout << "ERROR::L-SYSTEM::SEGMENT IS ZERO" << std::endl;
+			}
+			std::cout << "Seg " << i << " : (" << seg.first.x << "," << seg.first.y << "," << seg.first.z << ")"
+				<< " - (" << seg.second.x << ", " << seg.second.y << ", " << seg.second.z << ")" << std::endl;
+		}
+
+		std::cout << "Write:" << std::endl;
+		for (int i = 0; i < segmentsWrite->size(); i++) {
+			pair<vec3, vec3> seg = segmentsWrite->at(i);
+
+			std::cout << "Seg " << i << " : (" << seg.first.x << "," << seg.first.y << "," << seg.first.z << ")"
+				<< " - (" << seg.second.x << ", " << seg.second.y << ", " << seg.second.z << ")" << std::endl;
+		}
+		*/
+
+		for (int seg = 0; seg < numSegments; seg++) {
+
+			// Get the last segment, then remove it.
+			pair<vec3, vec3> currentSeg = segmentsRead->back();
+			segmentsRead->pop_back();
+
+			// calculate mid point
+			vec3 mid = GetMidPnt(currentSeg.first, currentSeg.second, maxDisplacement);
+
+			// Check for mad mid point
+			if (currentSeg.first == mid or currentSeg.second == mid) {
+				std::cout << "Mad mid point! Seg " << seg << " , Detail " << d << std::endl;
+			}
+
+			// add the new segments
+			segmentsWrite->push_back({ currentSeg.first, mid });
+			segmentsWrite->push_back({ mid, currentSeg.second });
+
+			// Branch
+			// don't branch when d is below certain value. A branch at only 1 detail looks bad
+			if (branching && d > LSystemBranchMinDetail && RollBranchChance(LSystemBranchChance)) {
+
+				vec3 dir = mid - currentSeg.first;
+
+				// introduce a little variation to the direction
+
+				vec3 branchEnd = mid + (dir * LSystemBranchScaler);
+
+				if (branchEnd == mid);
+
+				segmentsWrite->push_back({ mid, branchEnd });
+			}
+		}
+
+		// Reduce maxDisplacement
+		maxDisplacement *= 0.5f;
+
+		// swap vectors
+		vector<pair<vec3, vec3>>* temp = segmentsRead;
+		segmentsRead = segmentsWrite;
+		segmentsWrite = temp;
+	}
+
+	// add the segments to the pattern
+	for (int i = 0; i < segmentsRead->size(); i++) {
+		patternPtr->push_back({ segmentsRead->at(i).first, segmentsRead->at(i).second });
 	}
 
 	return patternPtr;

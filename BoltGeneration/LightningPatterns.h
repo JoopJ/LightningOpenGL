@@ -41,6 +41,8 @@ int GenerateLSystemPattern(vec3 start,
 	std::shared_ptr<vec3[numSegmentsInPattern]> patternPtr);
 vector<pair<vec3, vec3>>* GenerateLSystemPattern(vec3 start,
 	vector<pair<vec3, vec3>>* patternPtr);
+vector<pair<vec3, vec3>>* GenerateLSystemPattern(vec3 start,
+	vector<pair<vec3, vec3>>* patternPtr, bool x);
 // ----------------------
 
 // GUI

@@ -22,9 +22,8 @@ Method methods[3] = { Random, Particle, LSystem };
 int currentMethod = 0;
 
 // Number of Lights variables
-int numLights = 50;	// controls the (max) number of lights
+int numLights = 15;	// controls the (max) number of lights
 float lightPerSeg = 1;
-
 int numActiveLights;
 int numActiveSegments;
 
@@ -107,11 +106,11 @@ void PositionBoltPointLights(vector<vec3>* lightPositionsPtr,
 	numActiveLights = 0;
 
 	// scale lightsPerSeg based on number of segments
-	lightPerSeg = numLights / (float)patternPtr->size();
+	lightPerSeg = (float)numLights / (float)patternPtr->size();
 
 	float count = 0;
 
-	for (int seg = 0; seg < patternPtr->size()-1; seg++) {
+	for (int seg = 0; seg < patternPtr->size(); seg++) {
 		count += lightPerSeg;
 
 		if (count >= 1) {
@@ -150,7 +149,7 @@ void NewBolt(vector<LineBoltSegment>* segmentsPtr, vector<vec3>* lightsPtr,
 			particleSystemSeedSegment, patternPtr);
 		break;
 	case LSystem:
-		patternPtr = GenerateLSystemPattern(startPosition, patternPtr);
+		patternPtr = GenerateLSystemPattern(startPosition, patternPtr, true);
 		break;
 
 	}

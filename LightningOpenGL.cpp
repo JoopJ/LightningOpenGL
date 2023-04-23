@@ -76,14 +76,11 @@ bool gammaCorrectionEnabled = true;
 bool exposureEnabled = true;
 
 // Array Type
-bool DYNAMIC_BOLT = false;
+bool DYNAMIC_BOLT = true;
 
 // Method Choice
 int methodChoice = 2; // 0 = random, 1 = particle system, 2 = l-system
 const char* methodNames[3] = { "Random Positions", "Particle System", "L-System"};
-
-// Debuging
-bool lightBoxesEnable = true;
 
 // function prototypes
 // MVP Setters
@@ -390,7 +387,7 @@ int main() {
 			// Dynamic Bolt
 			DrawLineBolt(dynamicLineSegmentsPtr);
 
-			if (lightBoxesEnable) {
+			if (lightManager.GetLightBoxesEnabled()) {
 				// Draw Point Light boxes
 				lightCubeShader.Use();
 				SetVPMatricies(lightCubeShader, view, projection);
@@ -401,7 +398,7 @@ int main() {
 			// Static Bolt
 			DrawLineBolt(staticLineSegmentsPtr);
 
-			if (lightBoxesEnable) {
+			if (lightManager.GetLightBoxesEnabled()) {
 				// Draw Point Light boxes
 				lightCubeShader.Use();
 				SetVPMatricies(lightCubeShader, view, projection);
@@ -618,7 +615,7 @@ void RenderImGui(LightManager *lm, PerformanceManager *pm) {
 		BoltGenerationGUI(methodChoice);
 
 	if (toggleLightingWindow)
-		lm->LightingGUI(&lightBoxesEnable);
+		lm->LightingGUI();
 
 	if (togglePostProcessingWindow)
 		PostProcessingGUI();

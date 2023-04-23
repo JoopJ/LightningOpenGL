@@ -26,7 +26,9 @@ public:
 	void RenderDepthMaps();
 	void BindCubeMapArray();
 	void SetLightingPassUniforms(Shader* shader);
-	void LightingGUI(bool* lightBoxesEnable);
+	void LightingGUI();
+
+	bool GetLightBoxesEnabled();
 
 private:
 	// Variables ---------
@@ -36,6 +38,7 @@ private:
 	mat4 shadowProj;
 
 	vector<vec3> lightPositions;
+	int numLights = 50;	// controls the (max) number of lights
 	int numActiveLights;
 
 	// Constants
@@ -69,9 +72,15 @@ private:
 	vec3 lightColor;
 	int attenuationChoice;
 	int attenuationRadius;
+	// Debuging
+	bool lightBoxesEnabled = true;
 
 	// Functions ---------
 	void SetupFBOandTexture();
 	vector<mat4> GenerateShadowTransforms(vec3 lightPos);
 	void UpdateShadowProjection();
+	// GUIs
+	void LightingTabGUI();
+	void ShadowsTabGUI();
+	void LightsTabGUI();
 };
