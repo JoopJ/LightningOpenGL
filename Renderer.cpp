@@ -16,7 +16,9 @@ const int range = 15;
 void RenderRoomCube(Shader shader, float scale, vec3 pos);
 void RenderRandomBoxes(Shader shader);
 void RenderAlcove(Shader shader);
+void RenderPlane(Shader shader);
 void RenderSlab(Shader shader, mat4 model);
+void RenderArch(Shader shader, mat4 model);
 
 // Only Sets the model matrix, other matrices should already be set
 
@@ -24,7 +26,58 @@ void RenderScene(const Shader& shader) {
 
 	//RenderRoomCube(shader, 20, vec3(0, 5, 0));
 	//RenderRandomBoxes(shader);
-	RenderAlcove(shader);
+	//RenderAlcove(shader);
+	RenderPlane(shader);
+}
+
+void RenderPlane(Shader shader) {
+	mat4 model = mat4(1.0f);
+
+	// Floor
+	shader.SetInt("useTexture", 0);
+	shader.SetVec3("color", vec3(0.1f));
+	model = glm::translate(model, vec3(0, 0, 0));
+	model = glm::scale(model, vec3(30, 1, 30));
+	shader.SetMat4("model", model);
+	RenderCube();
+
+	// Boxes
+	shader.SetInt("useTexture", 2);
+	model = mat4(1.0f);
+	model = glm::translate(model, vec3(3, 1.3f, -2));
+	model = glm::scale(model, vec3(0.5f));
+	shader.SetMat4("model", model);
+	RenderCube();
+
+	model = glm::translate(model, vec3(0, 0, 8));
+	model = glm::scale(model, vec3(1.5f));
+	shader.SetMat4("model", model);
+	RenderCube();
+
+	// Arch
+	shader.SetInt("useTexture", 0);
+	shader.SetVec3("color", vec3(0.5f, 0.5f, 0.0f));
+	model = mat4(1.0f);
+	model = glm::scale(model, vec3(0.4f));
+	model = glm::translate(model, vec3(0, 7, 0));
+	RenderArch(shader, model);
+}
+
+void RenderArch(Shader shader, mat4 model) {
+
+	model = glm::translate(model, vec3(0, 0, 5));
+	model = glm::scale(model, vec3(1, 5, 1));
+	shader.SetMat4("model", model);
+	RenderCube();
+
+	model = glm::translate(model, vec3(0, 0, -10));
+	shader.SetMat4("model", model);
+	RenderCube();
+
+	model = glm::translate(model, vec3(0, 0.8f, 5));
+	model = glm::scale(model, vec3(0.7f, 0.14f, 4.9f));
+	shader.SetMat4("model", model);
+	RenderCube();
 }
 
 void RenderAlcove(Shader shader) {

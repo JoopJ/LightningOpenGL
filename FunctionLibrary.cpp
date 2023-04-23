@@ -58,7 +58,7 @@ unsigned int LoadTexture(const char* path) {
 	path = fullPath.c_str();
 
 	int width, height, nrChannels;
-	unsigned char* data = stbi_load(path, &width, &height, &nrChannels, 3);
+	unsigned char* data = stbi_load(path, &width, &height, &nrChannels, 0);
 	if (stbi_failure_reason())
 		std::cout << "Failed reason: " << stbi_failure_reason() << std::endl;
 	if (data) {

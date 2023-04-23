@@ -125,7 +125,11 @@ int main() {
 
 	// Load Textures
 	// -------------------------
-	unsigned int metalWallTexture = LoadTexture("\\Textures\\metal_wall.png");
+	//unsigned int metalWallDiffuse = LoadTexture("\\Textures\\metal_wall.png");
+
+	unsigned int crate0Diffuse = LoadTexture("\\Textures\\crate0_diffuse.png");;
+	unsigned int crate1Diffuse = LoadTexture("\\Textures\\crate1_diffuse.png");
+	
 	// -------------------------
 
 	// Input
@@ -198,6 +202,11 @@ int main() {
 	screenShader.Use();
 	screenShader.SetInt("sceneTexture", 0);
 	screenShader.SetInt("bloomTexture", 1);
+
+	geometryPassShader.Use();
+	geometryPassShader.SetInt("texture1_diffuse", 0);
+	geometryPassShader.SetInt("texture2_diffuse", 1);
+	geometryPassShader.SetVec3("color", vec3(0.5f));
 	// -------------------------
 
 	// Light Manager Setup -----
@@ -325,9 +334,13 @@ int main() {
 		geometryPassShader.Use();
 		SetVPMatricies(geometryPassShader, view, projection);
 
-		// bind diffuse texture
+		// bind diffuse and normal textures
 		glActiveTexture(GL_TEXTURE0);
-		glBindTexture(GL_TEXTURE_2D, metalWallTexture);
+		glBindTexture(GL_TEXTURE_2D, crate0Diffuse);
+		glActiveTexture(GL_TEXTURE1);
+		glBindTexture(GL_TEXTURE_2D, crate1Diffuse);
+
+		geometryPassShader.SetInt("useTexture", 1);
 		RenderScene(geometryPassShader);
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
 

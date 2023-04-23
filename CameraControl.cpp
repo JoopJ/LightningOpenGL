@@ -1,8 +1,8 @@
 #include "CameraControl.h"
 
 // camera settings
-float cameraSpeedNormal = 9.0f;
-float cameraSpeedFast = 18.0f;
+float cameraSpeedNormal = 3.0f;
+float cameraSpeedFast = 9.0f;
 
 glm::vec3 cameraPos = glm::vec3(10.0f, 5.0f, 0.0f);
 glm::vec3 cameraFront = glm::vec3(-1.0f, 0.0f, 0.0f);
