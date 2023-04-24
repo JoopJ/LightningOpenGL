@@ -180,6 +180,8 @@ void LightManager::LightsTabGUI() {
 }
 
 void LightManager::LightingGUI() {
+	const ImVec2 startPos = ImVec2(575, 426);
+	ImGui::SetNextWindowPos(startPos, ImGuiCond_Once);
 	ImGui::Begin("Lighting", NULL, ImGuiWindowFlags_AlwaysAutoResize);
 
 	if (ImGui::BeginTabBar("Lighting")) {

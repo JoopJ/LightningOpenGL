@@ -492,7 +492,10 @@ vector<pair<vec3, vec3>>* GenerateLSystemPattern(vec3 _start,
 // GUI ----------------------
 // method: 0 - Random, 1 - Particle, 2 - L-System
 void BoltGenerationGUI(int method) {
+	const ImVec2 startPos = ImVec2(5, 383);
+	ImGui::SetNextWindowPos(startPos, ImGuiCond_Once);
 	ImGui::Begin("Bolt Generation", NULL, ImGuiWindowFlags_AlwaysAutoResize);
+
 	ImGui::Text("Bolt Generation Options");
 	ImGui::Separator();
 	switch (method) {

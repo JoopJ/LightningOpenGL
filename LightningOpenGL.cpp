@@ -647,6 +647,9 @@ void RenderImGui(LightManager *lm, PerformanceManager *pm) {
 }
 
 void BoltControlGUI(PerformanceManager* pm) {
+	const ImVec2 startPos = ImVec2(5, 183);
+	ImGui::SetNextWindowPos(startPos, ImGuiCond_Once);
+
 	ImGui::Begin("Bolt Control", NULL, ImGuiWindowFlags_AlwaysAutoResize);
 
 	ImGui::Text("Methods:");
@@ -671,6 +674,8 @@ void BoltControlGUI(PerformanceManager* pm) {
 }
 
 void PostProcessingGUI() {
+	const ImVec2 startPos = ImVec2(575, 119);
+	ImGui::SetNextWindowPos(startPos, ImGuiCond_Once);
 	ImGui::Begin("Post Processing", NULL, ImGuiWindowFlags_AlwaysAutoResize);
 
 	if (ImGui::CollapsingHeader("Bloom")) {
