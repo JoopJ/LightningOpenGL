@@ -10,7 +10,7 @@ LightManager::LightManager()
 	near_plane = 1;
 	far_plane = 150;
 	numActiveLights = 0;
-	attenuationChoice = 8;
+	attenuationChoice = 7;
 	vec3 atten = attenuationOptions[attenuationChoice];
 	attenuationRadius = atten.x;
 	linear = atten.y;
@@ -180,7 +180,7 @@ void LightManager::LightsTabGUI() {
 }
 
 void LightManager::LightingGUI() {
-	ImGui::Begin("Lighting");
+	ImGui::Begin("Lighting", NULL, ImGuiWindowFlags_AlwaysAutoResize);
 
 	if (ImGui::BeginTabBar("Lighting")) {
 		if (ImGui::BeginTabItem("Lighting")) {

@@ -2,17 +2,19 @@
 
 // Variables
 // Random
-int xVariation = 4;
-int yVariation = 4;
-float multiplyer = 1.25f;
+int hVariationMin = 1;
+int hVariationMax = 8;
+int vVariationMin = 6;
+int vVariationMax = 9;
+float multiplyer = 0.15f;
 
 // Particle
-float length = 1.5f;
+float length = 0.95f;
 
 // L-System
 float startingMaxDisplacement = 30;
-int LSystemDetail = 3;
-vec3 LSystemEndPosition = vec3(0,-20,0);
+int LSystemDetail = 8;
+vec3 LSystemEndPosition = vec3(40,-10,0);
 
 // Branching
 bool branching = true;
@@ -55,17 +57,21 @@ int BranchLength() {
 
 	return (rand() % (maxBranchLength - minBranchLength) + minBranchLength);
 }
+int RandomFlux() {
+	return 1 - (rand() % 2) * 2;
+}
 
 // Random Positions:
 glm::vec3 NextPoint(glm::vec3 point) {
 	// ger random variatins
-	int dx = (rand() % xVariation * 2 + 1) - xVariation;
-	int dy = (rand() % yVariation + 1);
-	int dz = (rand() % xVariation * 2 + 1) - xVariation;
+	int dx = hVariationMin + (rand() % (hVariationMax - hVariationMin + 1));
+	int dy = vVariationMin + (rand() % (vVariationMax - vVariationMin + 1));
+	int dz = hVariationMin + (rand() % (hVariationMax - hVariationMin + 1));
 
-	point.x += dx * multiplyer;
+	// RandomFlux is either 1 or -1.
+	point.x += dx * multiplyer * RandomFlux();
 	point.y -= dy * multiplyer;
-	point.z += dz * multiplyer;
+	point.z += dz * multiplyer * RandomFlux();
 
 	return point;
 }
@@ -486,27 +492,32 @@ vector<pair<vec3, vec3>>* GenerateLSystemPattern(vec3 _start,
 // GUI ----------------------
 // method: 0 - Random, 1 - Particle, 2 - L-System
 void BoltGenerationGUI(int method) {
-	ImGui::Begin("Bolt Generation");
+	ImGui::Begin("Bolt Generation", NULL, ImGuiWindowFlags_AlwaysAutoResize);
 	ImGui::Text("Bolt Generation Options");
 	ImGui::Separator();
 	switch (method) {
 	case 0:
 		ImGui::Text("Random");
-		ImGui::Text("Segment Position Variation");
-		ImGui::SliderInt("X Variation", &xVariation, 2, 10);
-		ImGui::SliderInt("Y Variation", &yVariation, 2, 10);
-		ImGui::SliderFloat("Multiplyer", &multiplyer, 0.1f, 2.0f);
+		ImGui::Separator();
+		ImGui::Text("Segment Position Variation:");
+		ImGui::Text("Horizontal");
+		ImGui::DragIntRange2("##Horizontal", &hVariationMin, &hVariationMax, 0.1f, 0, 15);
+		ImGui::Text("Vertical");
+		ImGui::DragIntRange2("##Vertical", &vVariationMin, &vVariationMax, 0.1f, 0, 15);
+		ImGui::Text("Multiplyer");
+		ImGui::SliderFloat("##Multiplyer", &multiplyer, 0.1f, 2.0f);
 		break;
 	case 1: 
 		ImGui::Text("Particle System");
+		ImGui::Separator();
 		ImGui::Text("Segment Length");
 		ImGui::SliderFloat("Length", &length, 0.1f, 2.0f);
 		break;
 	case 2:
 		ImGui::Text("L-System");
+		ImGui::Separator();
 		ImGui::Text("Max Displacement");
 		ImGui::InputFloat("##lsDisplacement", &startingMaxDisplacement, 1, 5, "%.0f");
-
 		ImGui::Text("Detail");
 		ImGui::InputInt("##lsDetail", &LSystemDetail, 1, 2);
 		break;

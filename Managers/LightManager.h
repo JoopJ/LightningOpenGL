@@ -73,7 +73,7 @@ private:
 	int attenuationChoice;
 	int attenuationRadius;
 	// Debuging
-	bool lightBoxesEnabled = true;
+	bool lightBoxesEnabled = false;
 
 	// Functions ---------
 	void SetupFBOandTexture();

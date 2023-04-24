@@ -54,10 +54,10 @@ using glm::radians;
 using glm::lookAt;
 
 // bolt generation settings
-const vec3 startPnt = vec3(0, 90, 0);
+const vec3 startPnt = vec3(25, 90, 0);
 
 // post processing
-int amount = 2;
+int amount = 8;
 float exposure = 0.5f;
 float gamma = 2.2f;
 
@@ -596,12 +596,15 @@ bool toggleTimersWindw = false;
 void RenderImGui(LightManager *lm, PerformanceManager *pm) {
 	ImGui_ImplOpenGL3_NewFrame();
 	ImGui_ImplGlfw_NewFrame();
-	ImGui::NewFrame();;
+	ImGui::NewFrame();
 
 	// Window Toggle Menu
-	ImGui::Begin("Window Menu");
+	ImGui::Begin("Window Menu", NULL, ImGuiWindowFlags_AlwaysAutoResize);
 	if (ImGui::Button("Bolt Generation")) {
 		toggleBoltGenWindow = !toggleBoltGenWindow;
+	}
+	if (ImGui::Button("Bolt Settings")) {
+		toggleBoltControlWindow = !toggleBoltControlWindow;
 	}
 	if (ImGui::Button("Lighting")) {
 		toggleLightingWindow = !toggleLightingWindow;
@@ -609,15 +612,15 @@ void RenderImGui(LightManager *lm, PerformanceManager *pm) {
 	if (ImGui::Button("Post Processing")) {
 		togglePostProcessingWindow = !togglePostProcessingWindow;
 	}
-	if (ImGui::Button("Bolt Control")) {
-		toggleBoltControlWindow = !toggleBoltControlWindow;
-	}
+	/*
 	if (ImGui::Button("Scene")) {
 		toggleSceneWindow = !toggleSceneWindow;
 	}
 	if (ImGui::Button("Timers")) {
 		toggleTimersWindw = !toggleTimersWindw;
 	}
+	*/
+
 	ImGui::End();
 
 	// Windows
@@ -644,7 +647,7 @@ void RenderImGui(LightManager *lm, PerformanceManager *pm) {
 }
 
 void BoltControlGUI(PerformanceManager* pm) {
-	ImGui::Begin("Bolt Control");
+	ImGui::Begin("Bolt Control", NULL, ImGuiWindowFlags_AlwaysAutoResize);
 
 	ImGui::Text("Methods:");
 	if (ImGui::Combo("##", &methodChoice, methodNames, 3)) {
@@ -668,7 +671,7 @@ void BoltControlGUI(PerformanceManager* pm) {
 }
 
 void PostProcessingGUI() {
-	ImGui::Begin("Post Processing");
+	ImGui::Begin("Post Processing", NULL, ImGuiWindowFlags_AlwaysAutoResize);
 
 	if (ImGui::CollapsingHeader("Bloom")) {
 		ImGui::Text("Amount:");
