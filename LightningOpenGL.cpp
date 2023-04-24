@@ -10,7 +10,6 @@ ImGui is used for the GUI which allows editting of various variables used to gen
 #include <stdlib.h>
 #include <crtdbg.h>
 
-
 #include <iostream>
 #include <vector>
 #include <math.h>
@@ -20,17 +19,15 @@ ImGui is used for the GUI which allows editting of various variables used to gen
 #include <iterator>
 #include <string>
 
-#define PI 3.14159265
-
-#include "include/imgui/imgui.h"
-#include "include/imgui/imgui_impl_glfw.h"
-#include "include/imgui/imgui_impl_opengl3.h"
+#include <imgui/imgui.h>
+#include <imgui/imgui_impl_glfw.h>
+#include <imgui/imgui_impl_opengl3.h>
 
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 #define GLM_ENABLE_EXPERIMENTAL
-#include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp>
+#include <glm/glm/glm.hpp>
+#include <glm/glm/gtc/matrix_transform.hpp>
 
 // other files
 #include "BoltGeneration/LineBoltSegment.h"
@@ -44,7 +41,6 @@ ImGui is used for the GUI which allows editting of various variables used to gen
 #include "Managers/PerformanceManager.h"
 #include "FunctionLibrary.h"
 #include "CameraControl.h"
-#include "Renderer.h"
 #include "Timer.h"
 
 using glm::vec3;
@@ -123,13 +119,11 @@ int main() {
 	glEnable(GL_CULL_FACE);
 	// -------------------------
 
-	// Load Textures
+	// Load Textures & Models
 	// -------------------------
-	//unsigned int metalWallDiffuse = LoadTexture("\\Textures\\metal_wall.png");
-
 	unsigned int crate0Diffuse = LoadTexture("\\Textures\\crate0_diffuse.png");;
 	unsigned int crate1Diffuse = LoadTexture("\\Textures\\crate1_diffuse.png");
-	
+	LoadModels();
 	// -------------------------
 
 	// Input
@@ -341,7 +335,7 @@ int main() {
 		glBindTexture(GL_TEXTURE_2D, crate1Diffuse);
 
 		geometryPassShader.SetInt("useTexture", 1);
-		RenderScene(geometryPassShader);
+		gBuffer.GeometryPass(geometryPassShader);
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
 		// Generate Shadow Maps
@@ -641,6 +635,8 @@ void RenderImGui(LightManager *lm, PerformanceManager *pm) {
 
 	// Performance
 	pm->PerformanceGUI();
+
+	RenderGUI();
 
 	ImGui::Render();
 	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());

@@ -1,7 +1,7 @@
 #include "FunctionLibrary.h"
 
 #define STB_IMAGE_IMPLEMENTATION
-#include "include/stb_image.h"
+#include <stb_image/stb_image.h>
 
 unsigned int SCR_WIDTH;
 unsigned int SCR_HEIGHT;
@@ -12,16 +12,6 @@ std::string projectBase = "";
 std::string vertexDir = ProjectBasePath() + "\\Shader\\VertexShaders";
 std::string fragmentDir = ProjectBasePath() + "\\Shader\\FragmentShaders";
 std::string geometryDir = ProjectBasePath() + "\\Shader\\GeometryShaders";
-
-void LoadTextures() {
-	// load textures
-	std::string filename = "wall.png";
-	std::cout << "Loading texture: " << filename << std::endl;
-	unsigned int boltTexture = LoadTexture(filename.c_str());
-	if (boltTexture == 0)
-		std::cout << "Failed to load texture: " << filename << std::endl;
-	else std::cout << "Successfully loaded: " << filename << std::endl;
-}
 
 Shader LoadShader(const char* vertex, const char* fragment, const char* geometry) {
 	std::string vertexPath = vertexDir + "\\" + vertex;

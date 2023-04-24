@@ -9,28 +9,39 @@ in vec2 TexCoords;
 in vec3 FragPos;
 in vec3 Normal;
 
-uniform sampler2D texture1_diffuse;
-uniform sampler2D texture2_diffuse;
-uniform int useTexture;
+uniform sampler2D texture_diffuse1;
+uniform sampler2D texture_normal1;
+uniform sampler2D texture_specular1;
+
+uniform bool useDiffuse;
+uniform bool useNormal;
+uniform bool useSpecular;
+
 uniform vec3 color;
 
 void main()
 {    
-    // store the fragment position vector in the first gbuffer texture
+    // Position
     gPosition = FragPos;
 
-    // also store the per-fragment normals and diffuse:
-    gNormal = normalize(Normal);
-    // select the texture to use
-    if (useTexture == 1) {
-		gAlbedoSpec.rgb = texture(texture1_diffuse, TexCoords).rgb;
-	} else if (useTexture == 2) {
-        gAlbedoSpec.rgb = texture(texture2_diffuse, TexCoords).rgb;
+    // Normal
+    if (useNormal) {
+            gNormal = texture(texture_normal1, TexCoords).rgb;
     } else {
-        // if not a texture, use the color uniform
+        gNormal = normalize(Normal);
+	}
+
+    // Diffuse
+    if (useDiffuse) {
+		gAlbedoSpec.rgb = texture(texture_diffuse1, TexCoords).rgb;
+	} else {
         gAlbedoSpec.rgb = color;
     }
 
-    // store specular intensity in gAlbedoSpec's alpha component
-    gAlbedoSpec.a = 1.0f;
+    // Specualar
+    if (useSpecular) {
+		gAlbedoSpec.a = texture(texture_specular1, TexCoords).r;
+	} else {
+		gAlbedoSpec.a = 1.0f;
+	}
 }

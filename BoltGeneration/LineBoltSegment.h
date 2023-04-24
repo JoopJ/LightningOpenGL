@@ -2,7 +2,7 @@
 
 #include <vector>
 #include <glad/glad.h>
-#include <glm/glm.hpp>
+#include <glm/glm/glm.hpp>
 
 #include "../FunctionLibrary.h"
 

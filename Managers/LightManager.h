@@ -1,14 +1,14 @@
 #pragma once
 
-#include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp>
-#include <glad.h>
+#include <glm/glm/glm.hpp>
+#include <glm/glm/gtc/matrix_transform.hpp>
+#include <glad/glad.h>
 #include <vector>
+#include <imgui/imgui.h>
 
 #include "../Shader/Shader.h"
 #include "../FunctionLibrary.h"
 #include "../Renderer.h"
-#include "../include/imgui/imgui.h"
 #include "../BoltGeneration/LightningPatterns.h"
 #include "../BoltGeneration/BoltSetup.h"
 

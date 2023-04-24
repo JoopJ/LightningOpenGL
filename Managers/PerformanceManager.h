@@ -2,7 +2,7 @@
 
 #include <vector>
 #include <iostream>
-#include <glm/glm.hpp>
+#include <glm/glm/glm.hpp>
 
 #include "../FunctionLibrary.h"
 #include "../BoltGeneration/LightningPatterns.h"

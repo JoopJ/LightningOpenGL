@@ -11,6 +11,13 @@ bool boxPositionsSet = false;
 const int numBoxes = 5;
 const int range = 15;
 
+// Models & Textures
+std::vector<Model> models;
+
+// Debugging
+bool toggleDiffuse = true;
+bool toggleSpecular = true;
+bool toggleNormal = true;
 
 // Extras Render Functions
 void RenderRoomCube(Shader shader, float scale, vec3 pos);
@@ -20,16 +27,50 @@ void RenderPlane(Shader shader);
 void RenderSlab(Shader shader, mat4 model);
 void RenderArch(Shader shader, mat4 model);
 
-// Only Sets the model matrix, other matrices should already be set
+void LoadModels() {
+	// flip loaded texture's on y-axis
+	stbi_set_flip_vertically_on_load(true);
 
+	Model backpack(ProjectBasePath() + "\\Models\\backpack\\backpack.obj");
+	models.push_back(backpack);
+}
+
+// Only Sets the model matrix, other matrices should already be set
 void RenderScene(const Shader& shader) {
 
 	//RenderRoomCube(shader, 20, vec3(0, 5, 0));
 	//RenderRandomBoxes(shader);
 	//RenderAlcove(shader);
 	RenderPlane(shader);
-}
 
+	// render models
+	// Set Shader Uniforms for Models
+	shader.SetBool("useDiffuse", toggleDiffuse);
+	shader.SetBool("useSpecular", toggleSpecular);
+	shader.SetBool("useNormal", toggleNormal);
+
+	mat4 modelmat = mat4(1.0f);
+	modelmat = glm::translate(modelmat, vec3(0, 6, 0));
+	modelmat = glm::scale(modelmat, vec3(1, 1, 1));
+	shader.SetMat4("model", modelmat);
+	models[0].Draw(shader);
+
+	// Set Shader Uniforms to default
+	shader.SetBool("useDiffuse", false);
+	shader.SetBool("useSpecular", false);
+	shader.SetBool("useNormal", false);
+}
+// GUI ----------
+void RenderGUI() {
+	ImGui::Begin("Debugging");
+	ImGui::Checkbox("Diffuse", &toggleDiffuse);
+	ImGui::Checkbox("Specular", &toggleSpecular);
+	ImGui::Checkbox("Normal", &toggleNormal);
+	ImGui::End();
+}
+// --------------
+
+// Extras -------
 void RenderPlane(Shader shader) {
 	mat4 model = mat4(1.0f);
 

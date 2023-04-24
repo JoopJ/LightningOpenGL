@@ -1,16 +1,15 @@
 #pragma once
 
 #include <random>
-#include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp>
+#include <glm/glm/glm.hpp>
+#include <glm/glm/gtc/matrix_transform.hpp>
 #include <memory>
 #include <vector>
-
+#include <irrlicht/include/quaternion.h>
 #include <iostream>
+#include <imgui/imgui.h>
 
-#include "../include/imgui/imgui.h"
 #include "../FunctionLibrary.h"
-#include "../include/Irrlicht/include/quaternion.h"
 
 using glm::vec3;
 using glm::mat4;

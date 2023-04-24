@@ -1,12 +1,13 @@
 #pragma once
 
-#include <glm/glm.hpp>
+#include <glm/glm/glm.hpp>
 #include <glad/glad.h>
 #include <filesystem>
 #include <string>
 #include <fstream>
 #include <sstream>
 #include <iostream>
+
 #include "Shader/Shader.h"
 
 using glm::vec3;

@@ -21,7 +21,7 @@ void main()
     TexCoords = aTexCoords;
     
     mat3 normalMatrix = transpose(inverse(mat3(model)));
-    if (reverse_normals) // reverse normals if we're inside the mesh
+    if (reverse_normals) // reverse normals. For if we're inside the mesh
     {
 		Normal = normalMatrix * (-1 * aNormal);
 	} else {

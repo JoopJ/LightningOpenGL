@@ -63,3 +63,7 @@ void G_Buffer::BindTextures() {
 	glActiveTexture(GL_TEXTURE2);
 	glBindTexture(GL_TEXTURE_2D, gAlbedoSpec);
 }
+
+void G_Buffer::GeometryPass(const Shader& shader) {
+	RenderScene(shader);
+}

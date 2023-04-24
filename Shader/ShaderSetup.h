@@ -1,6 +1,6 @@
 #pragma once
 
-#include <glm/glm.hpp>
+#include <glm/glm/glm.hpp>
 
 using glm::vec3;
 

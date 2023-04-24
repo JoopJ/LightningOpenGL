@@ -46,6 +46,7 @@ void main()
         
         // specular
         vec3 halfwayDir = normalize(lightDir + viewDir);
+        // TODO - control shininess
         float spec = pow(max(dot(Normal, halfwayDir), 0.0), 16.0);
         vec3 specular = Specular * spec * lightColor;
 

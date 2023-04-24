@@ -1,7 +1,7 @@
 #pragma once
 
 #include <GLFW/glfw3.h>
-#include "include/imgui/imgui.h"
+#include <imgui/imgui.h>
 #include <iostream>
 
 class Timer {
