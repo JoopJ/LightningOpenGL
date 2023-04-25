@@ -1,7 +1,11 @@
 #include "LightningPatterns.h"
 
 // Variables
+// General
+vec3 boltStartPos;
+
 // Random
+int rNumSegments = numSegmentsInPattern;
 int hVariationMin = 1;
 int hVariationMax = 8;
 int vVariationMin = 6;
@@ -9,12 +13,15 @@ int vVariationMax = 9;
 float multiplyer = 0.15f;
 
 // Particle
+int pNumSegments = numSegmentsInPattern;
 float length = 0.95f;
 
 // L-System
+int lNumSegments = 0;
+vec3 boltEndPos;
 float startingMaxDisplacement = 30;
 int LSystemDetail = 8;
-vec3 LSystemEndPosition = vec3(40,-10,0);
+vec3 LSystemEndPos = vec3(40,-10,0);
 
 // Branching
 bool branching = true;
@@ -229,9 +236,6 @@ void ParticleSystemBranch(vec3 start, vec3 seed, int size, vector<pair<vec3, vec
 		newPoint = prevEnd + newPointMove;
 	}
 }
-void LSystemBranch(vec3 start, int detail, vector<pair<vec3, vec3>>* patternPtr) {
-	
-}
 // --------------------------------------------------
 
 // Public Functions ---------------------------------
@@ -316,7 +320,7 @@ vector<pair<vec3, vec3>>* GenerateParticleSystemPattern(vec3 start, vec3 seed,
 	vec3 prevEnd = start;
 	vec3 newPoint = start + seed * length;
 
-	for (int i = 0; i < numSegmentsInPattern; i++) {
+	for (int i = 0; i < pNumSegments; i++) {
 		// add the new segment to the pattern
 		patternPtr->push_back({ ConvertWorldToScreen(prevEnd), ConvertWorldToScreen(newPoint) });
 
@@ -354,14 +358,15 @@ int GenerateLSystemPattern(vec3 start,
 	int endIndex = size - 1;
 
 	patternPtr[startIndex] = ConvertWorldToScreen(start);
-	patternPtr[endIndex] = ConvertWorldToScreen(LSystemEndPosition);
+	patternPtr[endIndex] = ConvertWorldToScreen(LSystemEndPos);
 
-	LSystemSubDivide(start, LSystemEndPosition, startIndex, endIndex, 
+	LSystemSubDivide(start, LSystemEndPos, startIndex, endIndex, 
 		LSystemDetail, startingMaxDisplacement, patternPtr);
 
 	return size;
 }
 //DYNAMIC BOLT
+// Dynamic Version of Static L-System Pattern. No Branching!
 vector<pair<vec3, vec3>>* GenerateLSystemPattern(vec3 start,
 	vector<pair<vec3, vec3>>* patternPtr) {
 
@@ -376,13 +381,12 @@ vector<pair<vec3, vec3>>* GenerateLSystemPattern(vec3 start,
 	int endIndex = size - 1;
 
 	patternPointsPtr->at(startIndex) = ConvertWorldToScreen(start);
-	patternPointsPtr->at(endIndex) = ConvertWorldToScreen(LSystemEndPosition);
+	patternPointsPtr->at(endIndex) = ConvertWorldToScreen(LSystemEndPos);
 
-	LSystemSubDivide(start, LSystemEndPosition, startIndex, endIndex, 
+	LSystemSubDivide(start, LSystemEndPos, startIndex, endIndex, 
 		LSystemDetail, (float)startingMaxDisplacement, patternPointsPtr);
 
 	// add the points to the pattern as pairs
-	// TODO : Handling branching will go here.
 	patternPtr->clear();
 	patternPtr->resize(size);
 	for (int i = 0; i < size-1; i++) {
@@ -392,7 +396,7 @@ vector<pair<vec3, vec3>>* GenerateLSystemPattern(vec3 start,
 
 	return patternPtr;
 }
-
+// Alternate Dynamic L-System Pattern. Yes Branching!
 vector<pair<vec3, vec3>>* GenerateLSystemPattern(vec3 _start,
 	vector<pair<vec3, vec3>>* patternPtr, bool x) {
 
@@ -406,7 +410,7 @@ vector<pair<vec3, vec3>>* GenerateLSystemPattern(vec3 _start,
 	vector<pair<vec3, vec3>>* segmentsWrite = &segments2;
 
 	// add the first segment
-	segmentsRead->push_back({ _start, LSystemEndPosition });
+	segmentsRead->push_back({ _start, LSystemEndPos });
 
 	float maxDisplacement = startingMaxDisplacement;
 
@@ -414,28 +418,6 @@ vector<pair<vec3, vec3>>* GenerateLSystemPattern(vec3 _start,
 
 		int numSegments = segmentsRead->size();
 		segmentsWrite->clear();
-
-		/*
-		std::cout << "Num Segs: " << numSegments << std::endl;
-
-		std::cout << "Read:" << std::endl;
-		for (int i = 0; i < segmentsRead->size(); i++) {
-			pair<vec3, vec3> seg = segmentsRead->at(i);
-			if (seg.first == seg.second) {
-				std::cout << "ERROR::L-SYSTEM::SEGMENT IS ZERO" << std::endl;
-			}
-			std::cout << "Seg " << i << " : (" << seg.first.x << "," << seg.first.y << "," << seg.first.z << ")"
-				<< " - (" << seg.second.x << ", " << seg.second.y << ", " << seg.second.z << ")" << std::endl;
-		}
-
-		std::cout << "Write:" << std::endl;
-		for (int i = 0; i < segmentsWrite->size(); i++) {
-			pair<vec3, vec3> seg = segmentsWrite->at(i);
-
-			std::cout << "Seg " << i << " : (" << seg.first.x << "," << seg.first.y << "," << seg.first.z << ")"
-				<< " - (" << seg.second.x << ", " << seg.second.y << ", " << seg.second.z << ")" << std::endl;
-		}
-		*/
 
 		for (int seg = 0; seg < numSegments; seg++) {
 
@@ -446,22 +428,18 @@ vector<pair<vec3, vec3>>* GenerateLSystemPattern(vec3 _start,
 			// calculate mid point
 			vec3 mid = GetMidPnt(currentSeg.first, currentSeg.second, maxDisplacement);
 
-			// Check for mad mid point
-			if (currentSeg.first == mid or currentSeg.second == mid) {
-				std::cout << "Mad mid point! Seg " << seg << " , Detail " << d << std::endl;
-			}
-
 			// add the new segments
 			segmentsWrite->push_back({ currentSeg.first, mid });
 			segmentsWrite->push_back({ mid, currentSeg.second });
 
 			// Branch
-			// don't branch when d is below certain value. A branch at only 1 detail looks bad
+			// don't branch when d is below certain value. 
+			// A branch with low detail looks unrealistic.
 			if (branching && d > LSystemBranchMinDetail && RollBranchChance(LSystemBranchChance)) {
 
 				vec3 dir = mid - currentSeg.first;
 
-				// introduce a little variation to the direction
+				// TODO : introduce a little variation to the direction
 
 				vec3 branchEnd = mid + (dir * LSystemBranchScaler);
 
@@ -484,6 +462,7 @@ vector<pair<vec3, vec3>>* GenerateLSystemPattern(vec3 _start,
 	for (int i = 0; i < segmentsRead->size(); i++) {
 		patternPtr->push_back({ segmentsRead->at(i).first, segmentsRead->at(i).second });
 	}
+	lNumSegments = segmentsRead->size();
 
 	return patternPtr;
 }
@@ -523,9 +502,25 @@ void BoltGenerationGUI(int method) {
 		ImGui::InputFloat("##lsDisplacement", &startingMaxDisplacement, 1, 5, "%.0f");
 		ImGui::Text("Detail");
 		ImGui::InputInt("##lsDetail", &LSystemDetail, 1, 2);
+		ImGui::Text("Branch Scalar");
+		ImGui::InputFloat("##branchScalar", &LSystemBranchScaler, 0.1f, 1.0f);
 		break;
 	}
 
+	ImGui::Separator();
+	ImGui::Text("Num Segments");
+	switch (method) {
+	case 0: 
+		ImGui::InputInt("##rpnumSeg", &rNumSegments, 50, 300);
+		break;
+	case 1:
+		ImGui::InputInt("##psnumSeg", &pNumSegments, 50, 300);
+		break;
+	case 2:
+		ImGui::Text("%d", lNumSegments);
+		break;
+	}
+		
 	ImGui::Separator();
 	ImGui::Text("Branch Chance");
 	switch (method) {
@@ -538,9 +533,17 @@ void BoltGenerationGUI(int method) {
 	case 2:
 		ImGui::InputInt("##lsChance", &LSystemBranchChance, 1, 100);
 		break;
-
 	}
 	ImGui::End();
+}
+// --------------------------
+
+// Set Method Options -------
+
+void SetLSystemOptions(vec3 end, int detail, float maxDisplacement) {
+	LSystemEndPos = end;
+	LSystemDetail = detail;
+	startingMaxDisplacement = maxDisplacement;
 }
 // --------------------------
 

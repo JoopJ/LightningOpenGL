@@ -33,6 +33,9 @@ std::string ProjectBasePath() {
 		if (projectBase.substr(projectBase.length() - 10) == "\\x64\\Debug") {
 			projectBase.erase(projectBase.end() - 10, projectBase.end());
 		}
+		else if (projectBase.substr(projectBase.length() - 12) == "\\x64\\Release") {
+			projectBase.erase(projectBase.end() - 12, projectBase.end());
+		}
 	}
 	return projectBase;
 }

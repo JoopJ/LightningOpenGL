@@ -50,16 +50,16 @@ using glm::radians;
 using glm::lookAt;
 
 // bolt generation settings
-const vec3 startPnt = vec3(25, 90, 0);
+const vec3 startPnt = vec3(0, 90, 25);
 
 // post processing
 int amount = 8;
-float exposure = 0.5f;
+float exposure = 8.0f;
 float gamma = 2.2f;
 
 // lightning options
 float boltAlpha = 1.0f;
-vec3 boltColor = vec3(1.0f, 1.0f, 0.0f);	// Yellow
+vec3 boltColor = vec3(1.0f, 1.0f, 1.0f);	// Yellow
 vec3 cubeLightColor = vec3(1);				// White
 bool newBolt = true; // signals to generate a new bolt
 
@@ -119,10 +119,8 @@ int main() {
 	glEnable(GL_CULL_FACE);
 	// -------------------------
 
-	// Load Textures & Models
+	// Load Models
 	// -------------------------
-	unsigned int crate0Diffuse = LoadTexture("\\Textures\\crate0_diffuse.png");;
-	unsigned int crate1Diffuse = LoadTexture("\\Textures\\crate1_diffuse.png");
 	LoadModels();
 	// -------------------------
 
@@ -210,52 +208,24 @@ int main() {
 
 	// Performance Manager Setup
 	PerformanceManager performanceManager;
-	//performanceManager.SetTimerPerSecondOutput(FRAME, true);
-	//performanceManager.SetTimerAvgOutput(FRAME, true);
-	//performanceManager.SetTimerAvgTimeInterval(FRAME, 1.0);
 	// -------------------------
 
-	// Testing ---------
-	// mat4 lightRotateMat4 = glm::rotate(mat4(2.0), glm::radians(0.01f), vec3(0, 1, 0)); // used for rotating the lights
-	vector<vec3> lightPositions;
-	vec3 lightPos = vec3(0, 10, 0);
-	// -----------------
-
-	// Bolt Objects Definition
-	// ---------------
+	// Initial Bolt Generation Options
+	// ----------------
+	// Set the Method
+	SetMethod(methodChoice);
 	// Set Method Properties:
 
 	// Generation Method 0: Random Positions
 	// None
 
 	// Generation Method 1: Particle System
-	vec3 seed = vec3(6, -1000, -4);
-	SetParticleSystemSeedSegment(seed);
+	SetParticleSystemSeedSegment(vec3(6, -100, -4));
 
 	// Generation Method 2: L-System
-	// None
-
-	// Set the pattern generation method
-	SetMethod(methodChoice);
-
-	/*
-	// Generate the pattern and set the line segment positions and point light positions
-	if (DYNAMIC_BOLT) {
-		// Dynamic Bolt
-		NewBolt(dynamicLineSegmentsPtr, dynamicPointLightPositionsPtr,
-			startPnt, lightningDynamicPatternPtr);
-		
-		lightManager.SetLightPositions(dynamicPointLightPositionsPtr);
-	}
-	else {
-		// Static Bolt
-		NewBolt(staticLineSegmentsPtr, staticPointLightPositionsPtr,
-			startPnt, lightningStaticPatternPtr);
-
-		lightManager.SetLightPositions(staticPointLightPositionsPtr);
-	}
-	// ---------------
-	*/
+	// End Point, Detail, Max Displacement.
+	SetLSystemOptions(vec3(0, 0, 25), 8, 50.0f);
+	// ----------------
 
 	// G-Buffer -------
 	G_Buffer gBuffer(SCR_WIDTH, SCR_HEIGHT);
@@ -305,7 +275,6 @@ int main() {
 
 				lightManager.SetLightPositions(staticPointLightPositionsPtr);
 			}
-			newBolt = false;
 		}
 
 		// MVP
@@ -328,20 +297,16 @@ int main() {
 		geometryPassShader.Use();
 		SetVPMatricies(geometryPassShader, view, projection);
 
-		// bind diffuse and normal textures
-		glActiveTexture(GL_TEXTURE0);
-		glBindTexture(GL_TEXTURE_2D, crate0Diffuse);
-		glActiveTexture(GL_TEXTURE1);
-		glBindTexture(GL_TEXTURE_2D, crate1Diffuse);
-
-		geometryPassShader.SetInt("useTexture", 1);
 		gBuffer.GeometryPass(geometryPassShader);
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-		// Generate Shadow Maps
-		performanceManager.StartTimer(RENDER_SHADOWS);
-		lightManager.RenderDepthMaps();
-		performanceManager.UpdateTimer(RENDER_SHADOWS);
+		// Generate Shadow Maps, for new bolts
+		if (newBolt) {
+			performanceManager.StartTimer(RENDER_SHADOWS);
+			lightManager.RenderDepthMaps();
+			performanceManager.UpdateTimer(RENDER_SHADOWS);
+			newBolt = false;
+		}
 
 		performanceManager.UpdateTimer(GEOMETRY_PASS);
 
@@ -579,25 +544,27 @@ void ConfigureWindow() {
 	glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GL_TRUE);
 }
 
-// Window Toggles
-bool toggleBoltGenWindow = false;
-bool toggleLightingWindow = false;
-bool togglePostProcessingWindow = false;
-bool toggleSceneWindow = false;
-bool toggleBoltControlWindow = false;
-bool toggleTimersWindw = false;
 // GUI:
 void RenderImGui(LightManager *lm, PerformanceManager *pm) {
 	ImGui_ImplOpenGL3_NewFrame();
 	ImGui_ImplGlfw_NewFrame();
 	ImGui::NewFrame();
 
+	// Window Toggles
+	static bool toggleBoltGenWindow = false;
+	static bool toggleLightingWindow = false;
+	static bool togglePostProcessingWindow = false;
+	static bool toggleSceneWindow = false;
+	static bool toggleBoltControlWindow = false;
+	static bool toggleTimersWindw = false;
+	static bool toggleRenderWindow = false;
+
 	// Window Toggle Menu
 	ImGui::Begin("Window Menu", NULL, ImGuiWindowFlags_AlwaysAutoResize);
 	if (ImGui::Button("Bolt Generation")) {
 		toggleBoltGenWindow = !toggleBoltGenWindow;
 	}
-	if (ImGui::Button("Bolt Settings")) {
+	if (ImGui::Button("Bolt Method")) {
 		toggleBoltControlWindow = !toggleBoltControlWindow;
 	}
 	if (ImGui::Button("Lighting")) {
@@ -605,6 +572,9 @@ void RenderImGui(LightManager *lm, PerformanceManager *pm) {
 	}
 	if (ImGui::Button("Post Processing")) {
 		togglePostProcessingWindow = !togglePostProcessingWindow;
+	}
+	if (ImGui::Button("Render")) {
+		toggleRenderWindow = !toggleRenderWindow;
 	}
 	/*
 	if (ImGui::Button("Scene")) {
@@ -633,10 +603,11 @@ void RenderImGui(LightManager *lm, PerformanceManager *pm) {
 	if (toggleTimersWindw)
 		pm->TimersGUI();
 
+	if (toggleRenderWindow)
+		RenderGUI();
+
 	// Performance
 	pm->PerformanceGUI();
-
-	RenderGUI();
 
 	ImGui::Render();
 	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
@@ -646,7 +617,7 @@ void BoltControlGUI(PerformanceManager* pm) {
 	const ImVec2 startPos = ImVec2(5, 183);
 	ImGui::SetNextWindowPos(startPos, ImGuiCond_Once);
 
-	ImGui::Begin("Bolt Control", NULL, ImGuiWindowFlags_AlwaysAutoResize);
+	ImGui::Begin("Bolt Method", NULL, ImGuiWindowFlags_AlwaysAutoResize);
 
 	ImGui::Text("Methods:");
 	if (ImGui::Combo("##", &methodChoice, methodNames, 3)) {
@@ -682,13 +653,13 @@ void PostProcessingGUI() {
 
 	if (ImGui::CollapsingHeader("Gamma Correction")) {
 		ImGui::Text("Gamma:");
-		ImGui::SliderFloat("##", &gamma, 0.1f, 5.0f);
+		ImGui::SliderFloat("##", &gamma, 0.1f, 5.0f, "%.1f");
 		ImGui::Checkbox("##Enabled", &gammaCorrectionEnabled);
 	}
 
 	if (ImGui::CollapsingHeader("Exposre")) {
 		ImGui::Text("Exposure:");
-		ImGui::SliderFloat("###", &exposure, 0.1f, 30);
+		ImGui::SliderFloat("###", &exposure, 0.1f, 30, "%.1f");
 		ImGui::Checkbox("###Enabled", &exposureEnabled);
 	}
 	

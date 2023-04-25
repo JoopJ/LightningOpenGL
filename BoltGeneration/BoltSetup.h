@@ -29,6 +29,7 @@ float GetLightPerSegment();
 int GetCurrentMethod();
 int GetNumActiveLights();
 int GetNumActiveSegments();
+int GetNumLights();
 
 void SetNumLights(int num);
 void SetParticleSystemSeedSegment(vec3 seed);

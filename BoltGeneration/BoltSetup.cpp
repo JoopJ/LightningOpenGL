@@ -22,7 +22,7 @@ Method methods[3] = { Random, Particle, LSystem };
 int currentMethod = 0;
 
 // Number of Lights variables
-int numLights = 15;	// controls the (max) number of lights
+int numLights = 50;	// controls the (max) number of lights
 float lightPerSeg = 1;
 int numActiveLights;
 int numActiveSegments;
@@ -202,6 +202,10 @@ int GetNumActiveLights() {
 
 int GetNumActiveSegments() {
 	return numActiveSegments;
+}
+
+int GetNumLights() {
+	return numLights;
 }
 
 // Setters

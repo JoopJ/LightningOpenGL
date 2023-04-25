@@ -96,7 +96,6 @@ private:
         }
         // retrieve the directory path of the filepath
         directory = path.substr(0, path.find_last_of('\\'));
-        std::cout << "Directory: " << directory << std::endl;
 
         // process ASSIMP's root node recursively
         processNode(scene->mRootNode, scene);
@@ -239,6 +238,8 @@ private:
                 // store it as texture loaded for entire model, to ensure
                 // we won't load duplicate textures.
                 textures_loaded.push_back(texture);
+
+                std::cout << "Loaded: " << str.C_Str() << std::endl;
             }
         }
         return textures;

@@ -162,7 +162,7 @@ void LightManager::ShadowsTabGUI() {
 }
 
 void LightManager::LightsTabGUI() {
-	static int numLights = 15;
+	int numLights = GetNumLights();
 
 	ImGui::Text("Number of Lights:"); ImGui::SameLine();
 	ImGui::Text("%d", numLights);  ImGui::SameLine();

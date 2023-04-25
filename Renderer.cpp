@@ -13,11 +13,12 @@ const int range = 15;
 
 // Models & Textures
 std::vector<Model> models;
+vec3 defaultDiffuseColor = vec3(1.0f, 0.0f, 1.0f); // Purple
 
 // Debugging
 bool toggleDiffuse = true;
-bool toggleSpecular = true;
-bool toggleNormal = true;
+bool toggleSpecular = false;
+bool toggleNormal = false;
 
 // Extras Render Functions
 void RenderRoomCube(Shader shader, float scale, vec3 pos);
@@ -31,34 +32,34 @@ void LoadModels() {
 	// flip loaded texture's on y-axis
 	stbi_set_flip_vertically_on_load(true);
 
-	Model backpack(ProjectBasePath() + "\\Models\\backpack\\backpack.obj");
-	models.push_back(backpack);
+	Model waterTower(ProjectBasePath() + "\\Models\\waterTower\\Water Tower Scanline.obj");
+	models.push_back(waterTower);
 }
 
 // Only Sets the model matrix, other matrices should already be set
 void RenderScene(const Shader& shader) {
 
-	//RenderRoomCube(shader, 20, vec3(0, 5, 0));
-	//RenderRandomBoxes(shader);
-	//RenderAlcove(shader);
-	RenderPlane(shader);
-
-	// render models
+	// Render Models ---------
 	// Set Shader Uniforms for Models
 	shader.SetBool("useDiffuse", toggleDiffuse);
 	shader.SetBool("useSpecular", toggleSpecular);
 	shader.SetBool("useNormal", toggleNormal);
+	shader.SetVec3("color", defaultDiffuseColor);
 
+	// Model
 	mat4 modelmat = mat4(1.0f);
-	modelmat = glm::translate(modelmat, vec3(0, 6, 0));
+	modelmat = glm::translate(modelmat, vec3(0, 1, 16));
 	modelmat = glm::scale(modelmat, vec3(1, 1, 1));
 	shader.SetMat4("model", modelmat);
 	models[0].Draw(shader);
 
-	// Set Shader Uniforms to default
+	// Set Shader Uniforms to Default
 	shader.SetBool("useDiffuse", false);
 	shader.SetBool("useSpecular", false);
 	shader.SetBool("useNormal", false);
+
+	// Render Objects ---------
+	RenderPlane(shader);
 }
 // GUI ----------
 void RenderGUI() {
@@ -66,6 +67,10 @@ void RenderGUI() {
 	ImGui::Checkbox("Diffuse", &toggleDiffuse);
 	ImGui::Checkbox("Specular", &toggleSpecular);
 	ImGui::Checkbox("Normal", &toggleNormal);
+
+	ImGui::Separator();
+	ImGui::Text("Default Diffuse Color");
+	ImGui::ColorEdit3("##ddc", (float*)&defaultDiffuseColor);
 	ImGui::End();
 }
 // --------------
@@ -75,15 +80,21 @@ void RenderPlane(Shader shader) {
 	mat4 model = mat4(1.0f);
 
 	// Floor
-	shader.SetInt("useTexture", 0);
 	shader.SetVec3("color", vec3(0.1f));
 	model = glm::translate(model, vec3(0, 0, 0));
-	model = glm::scale(model, vec3(30, 1, 30));
+	model = glm::scale(model, vec3(40, 1, 60));
+	shader.SetMat4("model", model);
+	RenderCube();
+
+	// Back Wall
+	model = mat4(1.0f);
+	model = glm::translate(model, vec3(-30, 30, 0));
+	model = glm::scale(model, vec3(1, 40, 60));
+	//model = glm::rotate(model, glm::radians(90.0f), vec3(1, 1, 2));
 	shader.SetMat4("model", model);
 	RenderCube();
 
 	// Boxes
-	shader.SetInt("useTexture", 2);
 	model = mat4(1.0f);
 	model = glm::translate(model, vec3(3, 1.3f, -2));
 	model = glm::scale(model, vec3(0.5f));
@@ -96,8 +107,7 @@ void RenderPlane(Shader shader) {
 	RenderCube();
 
 	// Arch
-	shader.SetInt("useTexture", 0);
-	shader.SetVec3("color", vec3(0.5f, 0.5f, 0.0f));
+	shader.SetVec3("color", vec3(0.1f, 0.1f, 0.3f));
 	model = mat4(1.0f);
 	model = glm::scale(model, vec3(0.4f));
 	model = glm::translate(model, vec3(0, 7, 0));
