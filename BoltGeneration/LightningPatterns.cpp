@@ -28,9 +28,9 @@ bool branching = true;
 int minBranchLength = 5;
 int maxBranchLength = 50;
 
-int randomPositionsBranchChance = 5;
-int particleSystemBranchChance = 5;
-int LSystemBranchChance = 5;
+int randomPositionsBranchChance = 0;
+int particleSystemBranchChance = 0;
+int LSystemBranchChance = 0;
 
 float LSystemBranchScaler = 0.7f;
 
@@ -260,7 +260,7 @@ vector<pair<vec3, vec3>>* GenerateRandomPositionsPattern(vec3 start,
 	patternPtr->clear();
 
 	vec3 end;
-	for (int i = 0; i < numSegmentsInPattern; i++) {
+	for (int i = 0; i < rNumSegments; i++) {
 		end = NextPoint(start);
 		patternPtr->push_back({ ConvertWorldToScreen(start), ConvertWorldToScreen(end) });
 
@@ -544,6 +544,11 @@ void SetLSystemOptions(vec3 end, int detail, float maxDisplacement) {
 	LSystemEndPos = end;
 	LSystemDetail = detail;
 	startingMaxDisplacement = maxDisplacement;
+}
+
+void SetNumSegments(int num) {
+	rNumSegments = num;
+	pNumSegments = num;
 }
 // --------------------------
 

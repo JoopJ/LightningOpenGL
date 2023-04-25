@@ -42,6 +42,7 @@ ImGui is used for the GUI which allows editting of various variables used to gen
 #include "FunctionLibrary.h"
 #include "CameraControl.h"
 #include "Timer.h"
+//#include "Testing.h"
 
 using glm::vec3;
 using glm::mat4;
@@ -50,7 +51,7 @@ using glm::radians;
 using glm::lookAt;
 
 // bolt generation settings
-const vec3 startPnt = vec3(0, 90, 25);
+const vec3 startPnt = vec3(-20, 90, 16);
 
 // post processing
 int amount = 8;
@@ -235,6 +236,11 @@ int main() {
 	FboManager fboManager(SCR_WIDTH, SCR_HEIGHT);
 	// ----------------
 
+	// Speed Testing
+	//BeginTesting();
+	//glfwSetWindowShouldClose(window, true);
+
+
 	std::cout << "Starting Render Loop" << std::endl;
 	// render loop
 	while (!glfwWindowShouldClose(window)) {
@@ -301,7 +307,7 @@ int main() {
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
 		// Generate Shadow Maps, for new bolts
-		if (newBolt) {
+		if (false) {
 			performanceManager.StartTimer(RENDER_SHADOWS);
 			lightManager.RenderDepthMaps();
 			performanceManager.UpdateTimer(RENDER_SHADOWS);

@@ -49,3 +49,4 @@ void BoltGenerationGUI(int method);
 
 // Set Method Options
 void SetLSystemOptions(vec3 end, int detail, float maxDisplacement);
+void SetNumSegments(int num);

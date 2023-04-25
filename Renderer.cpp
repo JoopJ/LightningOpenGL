@@ -48,7 +48,7 @@ void RenderScene(const Shader& shader) {
 
 	// Model
 	mat4 modelmat = mat4(1.0f);
-	modelmat = glm::translate(modelmat, vec3(0, 1, 16));
+	modelmat = glm::translate(modelmat, vec3(-20, 1, 16));
 	modelmat = glm::scale(modelmat, vec3(1, 1, 1));
 	shader.SetMat4("model", modelmat);
 	models[0].Draw(shader);
@@ -89,7 +89,7 @@ void RenderPlane(Shader shader) {
 	// Back Wall
 	model = mat4(1.0f);
 	model = glm::translate(model, vec3(-30, 30, 0));
-	model = glm::scale(model, vec3(1, 40, 60));
+	model = glm::scale(model, vec3(1, 80, 60));
 	//model = glm::rotate(model, glm::radians(90.0f), vec3(1, 1, 2));
 	shader.SetMat4("model", model);
 	RenderCube();
@@ -107,10 +107,10 @@ void RenderPlane(Shader shader) {
 	RenderCube();
 
 	// Arch
-	shader.SetVec3("color", vec3(0.1f, 0.1f, 0.3f));
+	shader.SetVec3("color", vec3(0.0f, 0.0f, 0.0f));
 	model = mat4(1.0f);
 	model = glm::scale(model, vec3(0.4f));
-	model = glm::translate(model, vec3(0, 7, 0));
+	model = glm::translate(model, vec3(0, 7, -20));
 	RenderArch(shader, model);
 }
 
