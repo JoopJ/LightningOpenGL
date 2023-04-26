@@ -209,6 +209,8 @@ int main() {
 
 	// Performance Manager Setup
 	PerformanceManager performanceManager;
+	performanceManager.SetTimerOutput(NEW_BOLT, true);
+	performanceManager.SetTimerOutput(SHADOW_MAPS, true);
 	// -------------------------
 
 	// Initial Bolt Generation Options
@@ -244,7 +246,6 @@ int main() {
 	std::cout << "Starting Render Loop" << std::endl;
 	// render loop
 	while (!glfwWindowShouldClose(window)) {
-		performanceManager.StartTimer(FRAME);
 		// pre-frame time logic
 		// -----------------------
 		float currentFrame = static_cast<float>(glfwGetTime());
@@ -267,6 +268,8 @@ int main() {
 
 		// New Bolt
 		if (newBolt) {
+			auto t1 = std::chrono::high_resolution_clock::now();
+
 			if (DYNAMIC_BOLT) {
 				// Dynamic Bolt
 				NewBolt(dynamicLineSegmentsPtr, dynamicPointLightPositionsPtr,
@@ -281,6 +284,8 @@ int main() {
 
 				lightManager.SetLightPositions(staticPointLightPositionsPtr);
 			}
+
+			performanceManager.Update(NEW_BOLT, t1);
 		}
 
 		// MVP
@@ -295,7 +300,7 @@ int main() {
 
 		// 1. Geometry Pass: render all geometric/color data to g-buffer
 		// -----------------
-		performanceManager.StartTimer(GEOMETRY_PASS);
+		auto t1 = std::chrono::high_resolution_clock::now();
 
 		gBuffer.Bind();
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -306,20 +311,21 @@ int main() {
 		gBuffer.GeometryPass(geometryPassShader);
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
+		performanceManager.Update(GEOMETRY_PASS, t1);
+
 		// Generate Shadow Maps, for new bolts
-		if (false) {
-			performanceManager.StartTimer(RENDER_SHADOWS);
+		if (newBolt) {
+			t1 = std::chrono::high_resolution_clock::now();
 			lightManager.RenderDepthMaps();
-			performanceManager.UpdateTimer(RENDER_SHADOWS);
+			performanceManager.Update(SHADOW_MAPS, t1);
 			newBolt = false;
 		}
-
-		performanceManager.UpdateTimer(GEOMETRY_PASS);
 
 		// 2. Lighting Pass: calculate lighting by iterating over a screen filled quad 
 		//					 pixel-by-pixel using the g-buffer's content.
 		// -----------------
-		performanceManager.StartTimer(LIGHTING_PASS);
+
+		t1 = std::chrono::high_resolution_clock::now();
 
 		glViewport(0, 0, SCR_WIDTH, SCR_HEIGHT);
 		fboManager.Bind();
@@ -336,23 +342,20 @@ int main() {
 
 		RenderQuad();
 
-		performanceManager.UpdateTimer(LIGHTING_PASS);
+		performanceManager.Update(LIGHTING_PASS, t1);
 
 		// 2.5. copy contents of geometry buffer to fbo
 		// -----------------
-		performanceManager.StartTimer(G_BUFFER_COPY);
-
 		gBuffer.BindRead();
 		fboManager.BindDraw();
 		glBlitFramebuffer(0, 0, SCR_WIDTH, SCR_HEIGHT, 0, 0, SCR_WIDTH, SCR_HEIGHT,
 			GL_DEPTH_BUFFER_BIT, GL_NEAREST);
 
-		performanceManager.UpdateTimer(G_BUFFER_COPY);
 
 		// 3. Render Lightning Bolt
 		// -----------------
 		// rendered to fbo so bolt can be blurred and the scene and bolt can be blended together
-		performanceManager.StartTimer(RENDER_BOLT);
+		t1 = std::chrono::high_resolution_clock::now();
 		
 		glEnable(GL_DEPTH_TEST);
 
@@ -384,19 +387,17 @@ int main() {
 			}
 		}
 
-		performanceManager.UpdateTimer(RENDER_BOLT);
+		performanceManager.Update(RENDER_BOLT, t1);
 
 		// 4. Bloom
 		// -----------------
-		performanceManager.StartTimer(BLOOM);
-
+		t1 = std::chrono::high_resolution_clock::now();
 		bool horizontal = fboManager.ApplyBloom(blurShader, amount);
-
-		performanceManager.UpdateTimer(BLOOM);
+		performanceManager.Update(BLOOM, t1);
 
 		// 5. Blend Scene and Blurred Bolt to default framebuffer
 		// -----------------
-		performanceManager.StartTimer(BLEND);
+		t1 = std::chrono::high_resolution_clock::now();
 
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
 		glClear(GL_COLOR_BUFFER_BIT);
@@ -410,9 +411,8 @@ int main() {
 		screenShader.SetFloat("gamma", gamma);
 		RenderQuad();
 
-		performanceManager.UpdateTimer(BLEND);
+		performanceManager.Update(BLEND, t1);
 
-		performanceManager.UpdateTimer(FRAME);
 		// 6. GUI
 		// -----------------
 		RenderImGui(&lightManager, &performanceManager);
@@ -582,12 +582,12 @@ void RenderImGui(LightManager *lm, PerformanceManager *pm) {
 	if (ImGui::Button("Render")) {
 		toggleRenderWindow = !toggleRenderWindow;
 	}
+	if (ImGui::Button("Timers")) {
+		toggleTimersWindw = !toggleTimersWindw;
+	}
 	/*
 	if (ImGui::Button("Scene")) {
 		toggleSceneWindow = !toggleSceneWindow;
-	}
-	if (ImGui::Button("Timers")) {
-		toggleTimersWindw = !toggleTimersWindw;
 	}
 	*/
 

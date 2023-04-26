@@ -17,11 +17,15 @@ PerformanceManager::PerformanceManager() {
 
 void PerformanceManager::SetupTimers() {
 	double avgTimeInterval = 10.0;
-	const char* timerNames[numTimers] = { "Geometry Pass", "Render Shadows", "Lighting Pass",
-	"G-Buffer Copy", "Render Bolt", "Bloom", "Blend", "Frame"};
+	int chronoCountTarget = 100;
+
+	const char* timerNames[numTimers] = { "New Bolt", "Geometry Pass",
+		"Render Shadow Maps", "Lighting Pass", "Render Bolt", "Bloom",
+		"Blend"};
 
 	for (int i = 0; i < numTimers; i++) {
-		timers[i].Setup(timerNames[i], avgTimeInterval);
+		timers[i].first.Setup(timerNames[i], chronoCountTarget);
+		timers[i].second = false;	// default: update with average
 	}
 }
 
@@ -43,33 +47,40 @@ void PerformanceManager::PerformanceGUI() {
 // Timers
 void PerformanceManager::TimersGUI() {
 	ImGui::Begin("Timers");
+	ImGui::Separator();
 
+	ImGui::Text("Average");
 	for (int i = 0; i < numTimers; i++) {
-		ImGui::Separator();
-		timers[i].GUI();
+		if (!timers[i].second) {
+			//ImGui::Separator();
+			timers[i].first.GUI();
+		}
+	}
+	ImGui::Separator();
+
+	ImGui::Text("Once");
+	for (int i = 0; i < numTimers; i++) {
+		if (timers[i].second) {
+			//ImGui::Separator();
+			timers[i].first.GUI();
+		}
 	}
 
 	ImGui::End();
 }
 
-void PerformanceManager::StartTimer(TimerID id) {
-	timers[id].Start();
+void PerformanceManager::Update(TimerID id, time_point<high_resolution_clock> t1) {
+	timers[id].first.Update(t1);
 }
 
-void PerformanceManager::UpdateTimer(TimerID id) {
-	timers[id].Update();
+void PerformanceManager::SetTimerCountTarget(TimerID id, int countTarget) {
+	timers[id].first.SetChronoFrameTarget(countTarget);
 }
 
-void PerformanceManager::SetTimerPerSecondOutput(TimerID id, bool outputPerSecond) {
-	timers[id].SetPerSecond(outputPerSecond);
-}
-
-void PerformanceManager::SetTimerAvgOutput(TimerID id, bool outputAvg) {
-	timers[id].SetAverage(outputAvg);
-}
-
-void PerformanceManager::SetTimerAvgTimeInterval(TimerID id, double avgTimeInterval) {
-	timers[id].SetAvgTimeInterval(avgTimeInterval);
+// True: update once, False: update with average
+void PerformanceManager::SetTimerOutput(TimerID id, bool set) {
+	timers[id].first.SetChronoOnce(set);
+	timers[id].second = set;
 }
 
 // Pettern Info

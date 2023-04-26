@@ -3,94 +3,61 @@
 // constructor
 Timer::Timer() {
 	name = "Undefined";
-	avgTimeInterval = -1;
+	chronoOnce = false;
 }
 
-Timer::Timer(const char* name, double avgTime) {
-	Setup(name, avgTime);
+Timer::Timer(const char* name, int chronoTarget) {
+	Setup(name, chronoTarget);
 }
 
-void Timer::Setup(const char* _name, double avgTime) {
+void Timer::Setup(const char* _name, int chronoTarget) {
 	name = _name;
-	avgTimeInterval = avgTime;
+	chronoFrameTarget = chronoTarget;
 }
 
-// The time frame you wish to measure is controlled by calling
-// Start() and Update(). The time inbetween those two calls is measured.
-
-void Timer::Start() {
-	perSecondStartTime = glfwGetTime();
-	avgStartTime = glfwGetTime();
-}
-
-void Timer::Update() {
-	double currentTime = glfwGetTime();
-	double deltaTime = currentTime - prevTime;
-	prevTime = currentTime;
-
-	if (perSecond) {
-		perSecondFrameCount++;
-		perSecondTime += deltaTime;
-		perSecondTimeSum += currentTime - perSecondStartTime;
-
-		if (perSecondTime >= 1) {
-			PerSecondOutput();
-		}
+void Timer::Update(time_point<high_resolution_clock> t1) {
+	
+	duration<double, std::milli> ms = high_resolution_clock::now() - t1;
+	if (!chronoOnce) {
+		// Average over multiple frames
+		UpdateChrono(ms.count());
 	}
-
-	if (average) {
-		avgFrameCount++;
-		avgTime += deltaTime;
-		avgTimeSum += currentTime - avgStartTime;
-
-		if (avgTime >= avgTimeInterval) {
-			AvgOutput();
-		}
+	else {
+		// Single frame
+		UpdateChronoOnce(ms.count());
 	}
 }
 
-void Timer::PerSecondOutput() {
-	// calculate avg speed in milliseconds
-	perSecondMs = perSecondTimeSum / double(perSecondFrameCount);
-	std::cout << std::endl << name << " ms: " << perSecondMs << std::endl;
+// Take a chrono time point at the start of the time you want to measure
+//  and call this update at the end of the time you want to measure.
+void Timer::UpdateChrono(double time) {
 
-	perSecondFrameCount = 0;
-	perSecondTimeSum = 0;
-	perSecondTime = 0;
+	chronoTimeSum += time;
+	chronoFrameCount++;
+
+	if (chronoFrameCount >= chronoFrameTarget) {
+		avgChrono = chronoTimeSum / chronoFrameCount;
+		
+		chronoTimeSum = 0;
+		chronoFrameCount = 0;
+	}
 }
 
-void Timer::AvgOutput() {
-	// calculate avg speed in milliseconds
-	avgMs = avgTimeSum / double(avgFrameCount);
+// Same as UpdateChrono but dosen't take average over multiple frames
+void Timer::UpdateChronoOnce(double time) {
 
-	std::cout << std::endl << name << " ms: " << avgMs << std::endl;
-
-	avgFrameCount = 0;
-	avgTimeSum = 0;
-	avgTime = 0;
+	avgChrono = time;
 }
 
 void Timer::GUI() {
-	if (ImGui::CollapsingHeader(name)) {
-		ImGui::Checkbox("Per Second", &perSecond);
-		ImGui::Checkbox("Average", &average);
-
-		if (perSecond)
-			ImGui::Text("%.2f ms", perSecondMs);
-		if (average)
-			ImGui::Text("%.2f ms", avgMs);
-	}
+	ImGui::Text(name);
+	ImGui::Text("%.3f ms", float(avgChrono));
 }
 
-void Timer::SetPerSecond(bool set) {
-	perSecond = set;
+void Timer::SetChronoOnce(bool set) {
+	chronoOnce = set;
 }
 
-void Timer::SetAverage(bool set) {
-	average = set;
+void Timer::SetChronoFrameTarget(int val) {
+	chronoFrameTarget = val;
 }
-
-void Timer::SetAvgTimeInterval(double val) {
-	avgTimeInterval = val;
-}
-

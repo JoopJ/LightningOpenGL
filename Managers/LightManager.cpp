@@ -59,10 +59,10 @@ void LightManager::SetLightPositions(vector<vec3>* _lightPositions) {
 		std::cout << "ERROR::LightManager::SetLightPositions::DYNAMIC:: numLightsActive > MAX_POINT_LIGHTS" << std::endl;
 		return;
 	}
-
+	lightPositions.clear();
 	numActiveLights	= GetNumActiveLights();
 	for (int i = 0; i < numActiveLights; i++) {
-		lightPositions.at(i) = (_lightPositions->at(i));
+		lightPositions.push_back(_lightPositions->at(i));
 	}
 }
 

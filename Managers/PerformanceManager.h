@@ -13,22 +13,22 @@ using std::vector;
 using std::pair;
 
 enum TimerID {
-	GEOMETRY_PASS, RENDER_SHADOWS, LIGHTING_PASS, G_BUFFER_COPY, 
-	RENDER_BOLT, BLOOM, BLEND, FRAME
+	NEW_BOLT, GEOMETRY_PASS, SHADOW_MAPS, LIGHTING_PASS, 
+	RENDER_BOLT, BLOOM, BLEND
 };
 
-const int numTimers = 8;
+const int numTimers = 7;
 
 class PerformanceManager {
 public:
 	PerformanceManager();
 
 	// Timers
-	void StartTimer(TimerID id);
-	void UpdateTimer(TimerID id);
-	void SetTimerPerSecondOutput(TimerID id, bool outputPerSecond);
-	void SetTimerAvgOutput(TimerID id, bool outputAvg);
-	void SetTimerAvgTimeInterval(TimerID id, double timeInterval);
+	void Update(TimerID id, time_point<high_resolution_clock> t1);
+	// Toggle Output
+	void SetTimerOutput(TimerID id, bool set);
+	// Time interval / Frame Count Target
+	void SetTimerCountTarget(TimerID id, int countTarget);
 
 	// GUI
 	void TimersGUI();
@@ -42,7 +42,10 @@ public:
 
 private:
 	// Timers
-	Timer timers[numTimers];
+	// Timer: timer object
+	// Bool: [False] update with averge (default) 
+	//    or  [True] update with one frame (once)
+	pair<Timer, bool> timers[numTimers];
 	void SetupTimers();
 
 	// Pattern Info
