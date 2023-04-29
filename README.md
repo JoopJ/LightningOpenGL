@@ -7,7 +7,6 @@ An exploration of the methods used to create realistic looking and behaving ligh
 - glm-0.9.9.8
 - imgui-1.89.3
 - stb_image-2.28
-- irrlicht-1.8.5
 
 ## How to use
 
@@ -28,13 +27,6 @@ Esc - Exit
 GUI - gui windows can be toggled throug the Window Menu by pressing the buttons.
 
 ### TODO:
-
-- Make a more interesting Scene
-
-- Normal Distribution for:
-	- Branch Length
-
-- Clean up GUI
 
 Extra:
 - Blur Optimization
