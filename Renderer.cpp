@@ -20,6 +20,10 @@ bool toggleDiffuse = true;
 bool toggleSpecular = false;
 bool toggleNormal = false;
 
+// Scenes
+int scene = 1;
+void RenderScene1(Shader shader);
+
 // Extras Render Functions
 void RenderRoomCube(Shader shader, float scale, vec3 pos);
 void RenderRandomBoxes(Shader shader);
@@ -27,6 +31,7 @@ void RenderAlcove(Shader shader);
 void RenderPlane(Shader shader);
 void RenderSlab(Shader shader, mat4 model);
 void RenderArch(Shader shader, mat4 model);
+void RenderTower(Shader shader);
 
 void LoadModels() {
 	// flip loaded texture's on y-axis
@@ -39,27 +44,12 @@ void LoadModels() {
 // Only Sets the model matrix, other matrices should already be set
 void RenderScene(const Shader& shader) {
 
-	// Render Models ---------
-	// Set Shader Uniforms for Models
-	shader.SetBool("useDiffuse", toggleDiffuse);
-	shader.SetBool("useSpecular", toggleSpecular);
-	shader.SetBool("useNormal", toggleNormal);
-	shader.SetVec3("color", defaultDiffuseColor);
-
-	// Model
-	mat4 modelmat = mat4(1.0f);
-	modelmat = glm::translate(modelmat, vec3(-20, 1, 16));
-	modelmat = glm::scale(modelmat, vec3(1, 1, 1));
-	shader.SetMat4("model", modelmat);
-	models[0].Draw(shader);
-
-	// Set Shader Uniforms to Default
-	shader.SetBool("useDiffuse", false);
-	shader.SetBool("useSpecular", false);
-	shader.SetBool("useNormal", false);
-
-	// Render Objects ---------
-	RenderPlane(shader);
+	switch (scene) {
+	case 0:
+		break;
+	case 1:
+		RenderScene1(shader);
+	}
 }
 // GUI ----------
 void RenderGUI() {
@@ -75,7 +65,46 @@ void RenderGUI() {
 }
 // --------------
 
+// Set Uniforms -
+void SetModelUniforms(Shader shader) {
+	shader.SetBool("useDiffuse", toggleDiffuse);
+	shader.SetBool("useSpecular", toggleSpecular);
+	shader.SetBool("useNormal", toggleNormal);
+}
+void DefaultModelUniforms(Shader shader) {
+	shader.SetBool("useDiffuse", false);
+	shader.SetBool("useSpecular", false);
+	shader.SetBool("useNormal", false);
+}
+// --------------
+
+// Scenes -------
+void SetScene(int _scene) {
+	scene = _scene;
+}
+void RenderScene1(Shader shader) {
+	// Tower, Floor, Back Wall, 2 Boxes, Arch
+
+	// Tower
+	mat4 model = mat4(1.0f);
+	model = glm::translate(model, vec3(-20, 1, 16));
+	model = glm::scale(model, vec3(1, 1, 1));
+	shader.SetMat4("model", model);
+	SetModelUniforms(shader);
+	RenderTower(shader);
+	DefaultModelUniforms(shader);
+
+	// Everything else
+	RenderPlane(shader);
+}
+// --------------
+
 // Extras -------
+void RenderTower(Shader shader) {	
+
+	models[0].Draw(shader);
+}
+
 void RenderPlane(Shader shader) {
 	mat4 model = mat4(1.0f);
 
@@ -210,6 +239,7 @@ void RenderSlab(Shader shader, mat4 model) {
 }
 // ---------------
 
+// Basic ---------
 void RenderQuad() {
 	if (quadVAO == 0) {	// setup
 		float quadVertices[] = {	// fills whole screen in NDC;
@@ -389,3 +419,4 @@ void RenderWall() {
 	glDrawArrays(GL_TRIANGLES, 0, 6);
 	glBindVertexArray(0);
 }
+// ---------------

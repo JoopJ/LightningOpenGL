@@ -26,14 +26,12 @@ int numLights = 50;	// controls the (max) number of lights
 float lightPerSeg = 1;
 int numActiveLights;
 int numActiveSegments;
-
-vec3 particleSystemSeedSegment;
 // --------------------
 
 // BoltSegment Setup
 // -------------
 // STATIC BOLT
-void DefineBoltLines(LineBoltSegment* lboltPtr, int numActiveSegments, 
+void DefineBoltLines(LineBoltSegment* lboltPtr, 
 	std::shared_ptr<glm::vec3[numSegmentsInPattern]> patternPtr) {
 
 	for (int i = 0; i < numActiveSegments - 1; i++) {
@@ -67,7 +65,7 @@ void DefineBoltLines(vector<LineBoltSegment>* lboltPtr,
 // a smooth number of lights along the bolt
 
 // STATIC BOLT
-void PositionBoltPointLights(vec3* lightPositionsPtr, int numActiveSegments,
+void PositionBoltPointLights(vec3* lightPositionsPtr,
 	std::shared_ptr<glm::vec3[numSegmentsInPattern]> patternPtr) {
 
 	// scale lightsPerSeg based on number of segments
@@ -135,55 +133,40 @@ void PositionBoltPointLights(vector<vec3>* lightPositionsPtr,
 // Generate a New Bolt and set line and light positions
 // ----------
 // DYNAMIC BOLT
-void NewBolt(vector<LineBoltSegment>* segmentsPtr, vector<vec3>* lightsPtr, 
-	vec3 startPosition,	vector<pair<vec3, vec3>>* patternPtr) {
+void NewBolt(vector<LineBoltSegment>* segmentsPtr, vector<vec3>* lightsPtr,
+	vector<pair<vec3, vec3>>* patternPtr) {
 
 	// Generate New Bolt Pattern
 	switch (methods[currentMethod]) {
 	case Random:
-		patternPtr = GenerateRandomPositionsPattern(startPosition,
-			patternPtr);
+		GenerateRandomPositionsPattern(patternPtr);
 		break;
 	case Particle:
-		patternPtr = GenerateParticleSystemPattern(startPosition,
-			particleSystemSeedSegment, patternPtr);
+		GenerateParticleSystemPattern(patternPtr);
 		break;
 	case LSystem:
-		patternPtr = GenerateLSystemPattern(startPosition, patternPtr, true);
+		GenerateLSystemPattern(patternPtr, true);
 		break;
-
 	}
-
-	// Set the LineSegment's Positions
-	DefineBoltLines(segmentsPtr, patternPtr);
-	// Set the PointLight's Positions
-	PositionBoltPointLights(lightsPtr, patternPtr);
 }
 
 // STATIC BOLT
-void NewBolt(LineBoltSegment* segmentsPtr, vec3* lightsPtr, vec3 startPosition,
+void NewBolt(LineBoltSegment* segmentsPtr, vec3* lightsPtr,
 	std::shared_ptr<vec3[numSegmentsInPattern]> patternPtr) {
 
 	// Generate New Bolt Pattern
 	numActiveSegments = 0;
 	switch (methods[currentMethod]) {
 	case Random:
-		numActiveSegments = GenerateRandomPositionsPattern(startPosition, 
-			patternPtr);
+		numActiveSegments = GenerateRandomPositionsPattern(patternPtr);
 		break;
 	case Particle:
-		numActiveSegments = GenerateParticleSystemPattern(startPosition, 
-			particleSystemSeedSegment, patternPtr);
+		numActiveSegments = GenerateParticleSystemPattern(patternPtr);
 		break;
 	case LSystem:
-		numActiveSegments = GenerateLSystemPattern(startPosition, patternPtr);
+		numActiveSegments = GenerateLSystemPattern( patternPtr);
 		break;
 	}
-
-	// Set the LingSegment's Positions
-	DefineBoltLines(segmentsPtr, numActiveSegments, patternPtr);
-	// Set the PointLight's Positions
-	PositionBoltPointLights(lightsPtr, numActiveSegments, patternPtr);
 }
 // ---------
 
@@ -211,10 +194,6 @@ int GetNumLights() {
 // Setters
 void SetNumLights(int num) {
 	numLights = num;
-}
-
-void SetParticleSystemSeedSegment(vec3 seed) {
-	particleSystemSeedSegment = seed;
 }
 
 void SetMethod(int m) {

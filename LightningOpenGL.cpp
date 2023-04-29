@@ -50,11 +50,8 @@ using std::vector;
 using glm::radians;
 using glm::lookAt;
 
-// bolt generation settings
-const vec3 startPnt = vec3(-20, 90, 16);
-
 // post processing
-int amount = 8;
+int amount = 4;
 float exposure = 8.0f;
 float gamma = 2.2f;
 
@@ -67,7 +64,7 @@ bool newBolt = true; // signals to generate a new bolt
 // toggles
 bool shadowsEnabled = true;
 bool shadowKeyPressed = false;
-bool bloom = true;
+bool bloom = false;
 bool bloomKeyPressed = false;
 bool gammaCorrectionEnabled = true;
 bool exposureEnabled = true;
@@ -76,7 +73,7 @@ bool exposureEnabled = true;
 bool DYNAMIC_BOLT = true;
 
 // Method Choice
-int methodChoice = 2; // 0 = random, 1 = particle system, 2 = l-system
+int methodChoice = 1; // 0 = random, 1 = particle system, 2 = l-system
 const char* methodNames[3] = { "Random Positions", "Particle System", "L-System"};
 
 // function prototypes
@@ -99,6 +96,7 @@ void InitImGui(GLFWwindow* window);
 void RenderImGui(LightManager* lm, PerformanceManager* pm);
 void PostProcessingGUI();
 void BoltControlGUI(PerformanceManager* pm);
+void SceneGUI();
 
 
 
@@ -209,8 +207,11 @@ int main() {
 
 	// Performance Manager Setup
 	PerformanceManager performanceManager;
-	performanceManager.SetTimerOutput(NEW_BOLT, true);
-	performanceManager.SetTimerOutput(SHADOW_MAPS, true);
+	// Set timers that aren't updated every frame
+	performanceManager.SetTimerUpdateType(NEW_BOLT, true);
+	performanceManager.SetTimerUpdateType(SHADOW_MAPS, true);
+	// Set timers to output their results
+	//performanceManager.SetOutputResults(SHADOW_MAPS, true);
 	// -------------------------
 
 	// Initial Bolt Generation Options
@@ -218,16 +219,17 @@ int main() {
 	// Set the Method
 	SetMethod(methodChoice);
 	// Set Method Properties:
+	SetStartPos(vec3(20, 90, 0));
 
 	// Generation Method 0: Random Positions
-	// None
+	SetRandomOptions(true);
 
 	// Generation Method 1: Particle System
-	SetParticleSystemSeedSegment(vec3(6, -100, -4));
+	SetParticleOptions(vec3(6, -100, -4));
 
 	// Generation Method 2: L-System
 	// End Point, Detail, Max Displacement.
-	SetLSystemOptions(vec3(0, 0, 25), 8, 50.0f);
+	SetLSystemOptions(vec3(-20, 0, 0), 8, 30.0f);
 	// ----------------
 
 	// G-Buffer -------
@@ -238,9 +240,23 @@ int main() {
 	FboManager fboManager(SCR_WIDTH, SCR_HEIGHT);
 	// ----------------
 
-	// Speed Testing
+	// Speed Testing --
+	/*
 	//BeginTesting();
 	//glfwSetWindowShouldClose(window, true);
+	const int wait = 0;
+	int waitCount = 0;
+
+	const int numTests = 10;
+	int numLights = 1;
+
+	double sum = 0;
+	double average = 0;
+	int count = 0;
+
+	SetNumLights(numLights);
+	*/
+	// ----------------
 
 
 	std::cout << "Starting Render Loop" << std::endl;
@@ -264,7 +280,26 @@ int main() {
 		ProcessKeyboardInput(window);
 		ProcessMiscInput(window, &firstMouseKeyPress);
 		ProcessLightningControlInput(window);
-		// --------------------------
+		// -----------------------
+
+		// Testing ---------------
+		/*
+		if (count >= numTests) {
+			average = sum / double(count);
+			std::cout << average << std::endl;
+
+			count = 0;
+			sum = 0;
+
+			numLights++;
+			SetNumLights(numLights);
+		}
+
+		if (numLights < 101) {
+			newBolt = true;
+		}
+		*/
+		// -----------------------
 
 		// New Bolt
 		if (newBolt) {
@@ -273,19 +308,33 @@ int main() {
 			if (DYNAMIC_BOLT) {
 				// Dynamic Bolt
 				NewBolt(dynamicLineSegmentsPtr, dynamicPointLightPositionsPtr,
-					startPnt, lightningDynamicPatternPtr);
+					lightningDynamicPatternPtr);
 
+				performanceManager.Update(NEW_BOLT, t1, std::chrono::high_resolution_clock::now());
+
+				// Set the LineSegment's Positions based on generated pattern
+				DefineBoltLines(dynamicLineSegmentsPtr, lightningDynamicPatternPtr);
+				// Set the PointLight's Positions based on generated pattern
+				PositionBoltPointLights(dynamicPointLightPositionsPtr, lightningDynamicPatternPtr);
+				// Set the LightManager's Light Positions
 				lightManager.SetLightPositions(dynamicPointLightPositionsPtr);
 			}
 			else {
 				// Static Bolt
 				NewBolt(staticLineSegmentsPtr, staticPointLightPositionsPtr,
-					startPnt, lightningStaticPatternPtr);
+					lightningStaticPatternPtr);
 
+				performanceManager.Update(NEW_BOLT, t1, std::chrono::high_resolution_clock::now());
+
+				DefineBoltLines(staticLineSegmentsPtr, lightningStaticPatternPtr);
+				PositionBoltPointLights(staticPointLightPositionsPtr, lightningStaticPatternPtr);
 				lightManager.SetLightPositions(staticPointLightPositionsPtr);
 			}
-
-			performanceManager.Update(NEW_BOLT, t1);
+			/*
+			duration<double, std::milli> ms = high_resolution_clock::now() - t1;
+			sum += ms.count();
+			count++;
+			*/
 		}
 
 		// MVP
@@ -311,13 +360,13 @@ int main() {
 		gBuffer.GeometryPass(geometryPassShader);
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-		performanceManager.Update(GEOMETRY_PASS, t1);
+		performanceManager.Update(GEOMETRY_PASS, t1, std::chrono::high_resolution_clock::now());
 
 		// Generate Shadow Maps, for new bolts
 		if (newBolt) {
 			t1 = std::chrono::high_resolution_clock::now();
 			lightManager.RenderDepthMaps();
-			performanceManager.Update(SHADOW_MAPS, t1);
+			performanceManager.Update(SHADOW_MAPS, t1, std::chrono::high_resolution_clock::now());
 			newBolt = false;
 		}
 
@@ -342,7 +391,7 @@ int main() {
 
 		RenderQuad();
 
-		performanceManager.Update(LIGHTING_PASS, t1);
+		performanceManager.Update(LIGHTING_PASS, t1, std::chrono::high_resolution_clock::now());
 
 		// 2.5. copy contents of geometry buffer to fbo
 		// -----------------
@@ -387,13 +436,13 @@ int main() {
 			}
 		}
 
-		performanceManager.Update(RENDER_BOLT, t1);
+		performanceManager.Update(RENDER_BOLT, t1, std::chrono::high_resolution_clock::now());
 
 		// 4. Bloom
 		// -----------------
 		t1 = std::chrono::high_resolution_clock::now();
 		bool horizontal = fboManager.ApplyBloom(blurShader, amount);
-		performanceManager.Update(BLOOM, t1);
+		performanceManager.Update(BLOOM, t1, std::chrono::high_resolution_clock::now());
 
 		// 5. Blend Scene and Blurred Bolt to default framebuffer
 		// -----------------
@@ -411,7 +460,7 @@ int main() {
 		screenShader.SetFloat("gamma", gamma);
 		RenderQuad();
 
-		performanceManager.Update(BLEND, t1);
+		performanceManager.Update(BLEND, t1, std::chrono::high_resolution_clock::now());
 
 		// 6. GUI
 		// -----------------
@@ -585,11 +634,9 @@ void RenderImGui(LightManager *lm, PerformanceManager *pm) {
 	if (ImGui::Button("Timers")) {
 		toggleTimersWindw = !toggleTimersWindw;
 	}
-	/*
 	if (ImGui::Button("Scene")) {
 		toggleSceneWindow = !toggleSceneWindow;
 	}
-	*/
 
 	ImGui::End();
 
@@ -611,6 +658,9 @@ void RenderImGui(LightManager *lm, PerformanceManager *pm) {
 
 	if (toggleRenderWindow)
 		RenderGUI();
+
+	if (toggleSceneWindow)
+		SceneGUI();
 
 	// Performance
 	pm->PerformanceGUI();
@@ -672,8 +722,29 @@ void PostProcessingGUI() {
 	ImGui::End();
 }
 
+void SceneGUI() {
+	ImGui::Begin("Scenes");
+
+	if (ImGui::BeginListBox("Scenes")) {
+		if (ImGui::Selectable("Empty")) {
+			SetScene(0);
+		}
+		if (ImGui::Selectable("Default")) {
+			SetScene(1);
+			SetStartPos(vec3(-20, 90, 0));
+			SetEndPos(vec3(-20, 0, 0));
+		}
+		if (ImGui::Selectable("Scene _")) {
+			//SetScene(2);
+		}
+		ImGui::EndListBox();
+	}
+
+	ImGui::End();
+}
+
 GLFWwindow* CreateWindow() {
-	GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "Deferred Point Shadow Mapping", NULL, NULL);
+	GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "Lightning Bolt Generation and Rendering", NULL, NULL);
 	if (window == NULL) {
 		std::cout << "Failed to create GLFW window" << std::endl;
 		glfwTerminate();

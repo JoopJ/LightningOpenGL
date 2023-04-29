@@ -15,9 +15,10 @@ void Timer::Setup(const char* _name, int chronoTarget) {
 	chronoFrameTarget = chronoTarget;
 }
 
-void Timer::Update(time_point<high_resolution_clock> t1) {
+void Timer::Update(time_point<high_resolution_clock> t1, 
+	time_point<high_resolution_clock> t2) {
 	
-	duration<double, std::milli> ms = high_resolution_clock::now() - t1;
+	duration<double, std::milli> ms = t2 - t1;
 	if (!chronoOnce) {
 		// Average over multiple frames
 		UpdateChrono(ms.count());
@@ -25,6 +26,17 @@ void Timer::Update(time_point<high_resolution_clock> t1) {
 	else {
 		// Single frame
 		UpdateChronoOnce(ms.count());
+	}
+
+	if (outputResults) {
+		sum += ms.count();
+		count++; 
+
+		if (count >= target) {
+			std::cout << name << " Ms: " << sum / count << std::endl;
+			sum = 0;
+			count = 0;
+		}
 	}
 }
 
@@ -60,4 +72,8 @@ void Timer::SetChronoOnce(bool set) {
 
 void Timer::SetChronoFrameTarget(int val) {
 	chronoFrameTarget = val;
+}
+
+void Timer::SetOutputResults(bool set) {
+	outputResults = set;
 }

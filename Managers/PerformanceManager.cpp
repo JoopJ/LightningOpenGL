@@ -69,8 +69,9 @@ void PerformanceManager::TimersGUI() {
 	ImGui::End();
 }
 
-void PerformanceManager::Update(TimerID id, time_point<high_resolution_clock> t1) {
-	timers[id].first.Update(t1);
+void PerformanceManager::Update(TimerID id, time_point<high_resolution_clock> t1, 
+	time_point<high_resolution_clock> t2) {
+	timers[id].first.Update(t1, t2);
 }
 
 void PerformanceManager::SetTimerCountTarget(TimerID id, int countTarget) {
@@ -78,9 +79,13 @@ void PerformanceManager::SetTimerCountTarget(TimerID id, int countTarget) {
 }
 
 // True: update once, False: update with average
-void PerformanceManager::SetTimerOutput(TimerID id, bool set) {
+void PerformanceManager::SetTimerUpdateType(TimerID id, bool set) {
 	timers[id].first.SetChronoOnce(set);
 	timers[id].second = set;
+}
+
+void PerformanceManager::SetOutputResults(TimerID id, bool set) {
+	timers[id].first.SetOutputResults(set);
 }
 
 // Pettern Info

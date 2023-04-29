@@ -24,6 +24,12 @@ private:
 	void UpdateChrono(double time);
 	void UpdateChronoOnce(double time);
 
+	// Output Results
+	double sum = 0;
+	int count = 0;
+	int target = 100;
+	bool outputResults = false;
+
 public:
 	Timer();
 	Timer(const char* namee, int chronoTarget);
@@ -31,7 +37,11 @@ public:
 
 	void GUI();
 
-	void Update(time_point<high_resolution_clock> t1);
+	void Update(time_point<high_resolution_clock> t1, 
+		time_point<high_resolution_clock> t2);
 	void SetChronoOnce(bool set);
 	void SetChronoFrameTarget(int val);
+	void SetOutputResults(bool set);
+
+	void Info();
 };

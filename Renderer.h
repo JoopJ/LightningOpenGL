@@ -11,6 +11,7 @@
 using glm::mat4;
 using glm::vec3;
 
+void SetScene(int _scene);
 void RenderScene(const Shader& shader);
 void LoadModels();
 

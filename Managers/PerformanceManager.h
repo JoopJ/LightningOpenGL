@@ -24,11 +24,13 @@ public:
 	PerformanceManager();
 
 	// Timers
-	void Update(TimerID id, time_point<high_resolution_clock> t1);
+	void Update(TimerID id, time_point<high_resolution_clock> t1, 
+		time_point<high_resolution_clock> t2);
 	// Toggle Output
-	void SetTimerOutput(TimerID id, bool set);
+	void SetTimerUpdateType(TimerID id, bool set);
 	// Time interval / Frame Count Target
 	void SetTimerCountTarget(TimerID id, int countTarget);
+	void SetOutputResults(TimerID id, bool set);
 
 	// GUI
 	void TimersGUI();
