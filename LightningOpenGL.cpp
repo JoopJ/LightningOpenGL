@@ -439,7 +439,7 @@ int main() {
 		// -----------------
 		t1 = std::chrono::high_resolution_clock::now();
 		fboManager.ApplyGlow(blurShader);
-		performanceManager.Update(BLOOM, t1, std::chrono::high_resolution_clock::now());
+		performanceManager.Update(GLOW, t1, std::chrono::high_resolution_clock::now());
 
 		// 5. Blend Scene and Blurred Bolt to default framebuffer
 		// -----------------

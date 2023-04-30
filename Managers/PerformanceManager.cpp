@@ -20,7 +20,7 @@ void PerformanceManager::SetupTimers() {
 	int chronoCountTarget = 100;
 
 	const char* timerNames[numTimers] = { "New Bolt", "Geometry Pass",
-		"Render Shadow Maps", "Lighting Pass", "Render Bolt", "Bloom",
+		"Render Shadow Maps", "Lighting Pass", "Render Bolt", "Glow",
 		"Blend"};
 
 	for (int i = 0; i < numTimers; i++) {

@@ -21,7 +21,7 @@ float maxLength = 1.0f;
 float lengthMultiplyer = 1.0f;
 float angleDegrees = 9;
 float angleVariance = 0.1f;
-bool particleQuaternion = true;
+bool particleRotation = 0;
 
 // L-System
 int lNumSegments = 0;
@@ -183,7 +183,7 @@ vec3 RotatePointAboutSeed(vec3 point, pair<vec3, vec3> seedPerpaxis) {
 	float r1 = glm::radians(degree1);
 	float r2 = glm::radians(degree2);
 
-	if (particleQuaternion) {
+	if (particleRotation == 0) {
 		return RotatePointAboutSeedQuaternion(point, seedPerpaxis, r1, r2);
 	}
 	else {
@@ -303,6 +303,19 @@ void ParticleSystemBranch(vec3 start, vec3 seed, int size, vector<pair<vec3, vec
 		newPointMove = RotatePointAboutSeed(newPointMove, seedPerpAxis);
 		newPoint = prevEnd + newPointMove;
 	}
+}
+vec3 LSystemBranch(vec3 dir) {
+	// returns a slightly rotated dir
+
+	// the rotation is based on the given direction vector
+
+	// get perpendicular axis
+	pair<vec3 ,vec3> perpAxis = GetRotationAxis(dir);
+	// get random angle
+	float radian = glm::radians((float)(rand() % 360));
+
+
+	return vec3(0);
 }
 // --------------------------------------------------
 
@@ -520,6 +533,9 @@ vector<pair<vec3, vec3>>* GenerateLSystemPattern(vector<pair<vec3, vec3>>* patte
 				// get the direction of S1
 				vec3 dir = mid - currentSeg.first;
 
+				// get the end of the branch
+				//vec3 branchEnd = LSystemBranch(mid - currentSeg.first);
+
 				vec3 branchEnd = mid + (dir * LSystemBranchScaler);
 
 				segmentsWrite->push_back({ mid, branchEnd });
@@ -588,6 +604,12 @@ void BoltGenerationGUI(int method) {
 		ImGui::InputInt("##lsDetail", &LSystemDetail, 1, 2);
 		ImGui::Text("Branch Scalar");
 		ImGui::InputFloat("##branchScalar", &LSystemBranchScaler, 0.1f, 10.0f);
+		ImGui::Separator();
+		ImGui::Text("Rotation Method");
+		if (ImGui::RadioButton("Quaternion", particleRotation == 0)) 
+			{ particleRotation = 0; } ImGui::SameLine();
+		if (ImGui::RadioButton("Matrix", particleRotation == 1)) 
+			{ particleRotation = 1; };
 		break;
 	}
 

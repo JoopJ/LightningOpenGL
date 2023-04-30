@@ -14,7 +14,7 @@ using std::pair;
 
 enum TimerID {
 	NEW_BOLT, GEOMETRY_PASS, SHADOW_MAPS, LIGHTING_PASS, 
-	RENDER_BOLT, BLOOM, BLEND
+	RENDER_BOLT, GLOW, BLEND
 };
 
 const int numTimers = 7;
