@@ -140,10 +140,12 @@ bool LightManager::GetLightBoxesEnabled() {
 	return lightBoxesEnabled;
 }
 
+// GUI
 void LightManager::LightingTabGUI() {
 	ImGui::Text("Attenuation");
 	ImGui::Text("Radius: %d", attenuationRadius);
 	if (ImGui::SliderInt("##choice", &attenuationChoice, 0, 11)) {
+		// Update the attenuation values
 		vec3 atten = attenuationOptions[attenuationChoice];
 		attenuationRadius = atten.x;
 		linear = atten.y;
@@ -154,13 +156,11 @@ void LightManager::LightingTabGUI() {
 	ImGui::Text("Light Color");
 	ImGui::ColorEdit3("##color", (float*)&lightColor);
 }
-
-
+// TABS
 void LightManager::ShadowsTabGUI() {
 	ImGui::Text("Far Plane: "); ImGui::SameLine();
 	ImGui::SliderFloat("##farPlane", &far_plane, 1, 200);
 }
-
 void LightManager::LightsTabGUI() {
 	int numLights = GetNumLights();
 
@@ -178,7 +178,6 @@ void LightManager::LightsTabGUI() {
 		lightBoxesEnabled = !lightBoxesEnabled;
 	}
 }
-
 void LightManager::LightingGUI() {
 	const ImVec2 startPos = ImVec2(575, 426);
 	ImGui::SetNextWindowPos(startPos, ImGuiCond_Once);

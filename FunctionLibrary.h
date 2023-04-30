@@ -14,8 +14,8 @@ using glm::vec3;
 using glm::mat4;
 
 // Textures
-void LoadTextures();
-unsigned int LoadTexture(const char* path);
+//void LoadTextures();
+//unsigned int LoadTexture(const char* path);
 
 // Shaders
 Shader LoadShader(const char* vertex, const char* fragment,

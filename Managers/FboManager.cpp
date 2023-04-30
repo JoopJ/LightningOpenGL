@@ -1,5 +1,6 @@
 #include "FboManager.h"
 
+// constructor
 FboManager::FboManager(unsigned int SCR_WIDTH, unsigned int SCR_HEIGHT) {
 	// FBO
 	// stores the scene in tcbo[0] and the bloom in tcbo[1], they are blended together in 4.5.
@@ -50,12 +51,14 @@ FboManager::FboManager(unsigned int SCR_WIDTH, unsigned int SCR_HEIGHT) {
 	}
 }
 
-bool FboManager::ApplyBloom(Shader shader, int amount) {
+// PUBLIC
+void FboManager::ApplyGlow(Shader shader) {
 	shader.Use();
+	shader.SetInt("weightType", weightType);
 	horizontal = true;
 	bool firstIteration = true;
 
-	for (int i = 0; i < amount; i++) {
+	for (int i = 0; i < glow; i++) {
 		glBindFramebuffer(GL_FRAMEBUFFER, pingpongFBO[horizontal]);
 		shader.SetInt("horizontal", horizontal);
 		// bind texutre of other framebuffer, or the texture to blur if first iteration
@@ -68,7 +71,43 @@ bool FboManager::ApplyBloom(Shader shader, int amount) {
 		if (firstIteration)
 			firstIteration = false;
 	}
-	return horizontal;
+}
+
+void FboManager::PostProcessingGUI() {
+	static const char* weightNames[2] = { "Gaussian", "Custom" };
+
+	const ImVec2 startPos = ImVec2(575, 119);
+	ImGui::SetNextWindowPos(startPos, ImGuiCond_Once);
+	ImGui::Begin("Post Processing", NULL, ImGuiWindowFlags_AlwaysAutoResize);
+
+	ImGui::Separator();
+	ImGui::Text("Glow");
+	ImGui::Checkbox("##glowEnabled", &glowEnabled);
+	if (glowEnabled) {
+		ImGui::SliderInt("##glow", &glow, 1, 20);
+		ImGui::Text("Weight Type");
+		ImGui::Combo("", &weightType, weightNames, 2);
+	}
+
+	ImGui::Separator();
+	ImGui::Text("Gamma Correction");
+	ImGui::Checkbox("##gammaEnabled", &gammaCorrectionEnabled);
+	if (gammaCorrectionEnabled) {
+		ImGui::SliderFloat("##gamma", &gamma, 0.1f, 5.0f, "%.1f");
+	}
+
+	ImGui::Separator();
+	ImGui::Text("Exposure");
+	ImGui::Checkbox("###exposureEnabled", &exposureEnabled);
+	if (exposureEnabled) {
+		ImGui::SliderFloat("##exposure", &exposure, 0.1f, 30, "%.1f");
+	}
+
+	ImGui::End();
+}
+
+bool FboManager::GetGlowEnabled() {
+	return glowEnabled;
 }
 
 unsigned int FboManager::GetFbo() {
@@ -83,21 +122,38 @@ void FboManager::BindDraw() {
 	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, fbo);
 }
 
-void FboManager::BindSceneAndBloom() {
+void FboManager::PrepareScreenShader(Shader* shader) {
+	BindSceneAndGlow();
+	SetScreenShaderUniforms(shader);
+}
+
+void FboManager::OutputBuffers() {
+	std::cout << "fbo: " << fbo << std::endl;
+	std::cout << "tcbo[0]: " << tcbo[0] << std::endl;
+	std::cout << "tcbo[1]: " << tcbo[1] << std::endl;
+	std::cout << "rbo: " << rbo << std::endl;
+	std::cout << "pingpongFBO[0]: " << pingpongFBO[0] << std::endl;
+	std::cout << "pingpongFBO[1]: " << pingpongFBO[1] << std::endl;
+	std::cout << "pingpongBuffer[0]: " << pingpongBuffer[0] << std::endl;
+	std::cout << "pingpongBuffer[1]: " << pingpongBuffer[1] << std::endl;
+}
+
+// PRIVATE
+void FboManager::SetScreenShaderUniforms(Shader* shader) {
+
+	shader->SetBool("bloomEnabled", glowEnabled);
+
+	shader->SetBool("gammaEnabled", gammaCorrectionEnabled);
+	shader->SetFloat("gamma", gamma);
+	shader->SetBool("exposureEnabled", exposureEnabled);
+	shader->SetFloat("exposure", exposure);
+
+}
+
+void FboManager::BindSceneAndGlow() {
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, tcbo[0]);
 	glActiveTexture(GL_TEXTURE1);
 	glBindTexture(GL_TEXTURE_2D, pingpongBuffer[!horizontal]);
-}
-
-void FboManager::OutputBuffers() {
-	std::cout << "fbo:				 " << fbo << std::endl;
-	std::cout << "tcbo[0]:			 " << tcbo[0] << std::endl;
-	std::cout << "tcbo[1]:			 " << tcbo[1] << std::endl;
-	std::cout << "rbo:				 " << rbo << std::endl;
-	std::cout << "pingpongFBO[0]:	 " << pingpongFBO[0] << std::endl;
-	std::cout << "pingpongFBO[1]:	 " << pingpongFBO[1] << std::endl;
-	std::cout << "pingpongBuffer[0]: " << pingpongBuffer[0] << std::endl;
-	std::cout << "pingpongBuffer[1]: " << pingpongBuffer[1] << std::endl;
 }
 

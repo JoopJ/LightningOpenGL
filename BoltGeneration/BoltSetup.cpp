@@ -44,7 +44,7 @@ void DefineBoltLines(vector<LineBoltSegment>* lboltPtr,
 	vector<pair<vec3, vec3>>* patternPtr) {
 
 	lboltPtr->clear();
-	lboltPtr->reserve(patternPtr->size());
+	//lboltPtr->reserve(patternPtr->size());
 
 	for (int i = 0; i < patternPtr->size(); i++) {
 		lboltPtr->push_back(LineBoltSegment(patternPtr->at(i).first, 
@@ -147,6 +147,9 @@ void NewBolt(vector<LineBoltSegment>* segmentsPtr, vector<vec3>* lightsPtr,
 	case LSystem:
 		GenerateLSystemPattern(patternPtr, true);
 		break;
+	default:
+		std::cout << "ERROR::BOLT_SETUP::NEW_BOLT::Bolt Method Not Set" << std::endl;
+		break;
 	}
 }
 
@@ -165,6 +168,9 @@ void NewBolt(LineBoltSegment* segmentsPtr, vec3* lightsPtr,
 		break;
 	case LSystem:
 		numActiveSegments = GenerateLSystemPattern( patternPtr);
+		break;
+	default:
+		std::cout << "ERROR::BOLT_SETUP::NEW_BOLT::Bolt Method Not Set" << std::endl;
 		break;
 	}
 }

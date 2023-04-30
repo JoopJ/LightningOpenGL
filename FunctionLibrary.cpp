@@ -42,6 +42,7 @@ std::string ProjectBasePath() {
 
 
 // Textures
+/*
 unsigned int LoadTexture(const char* path) {
 	unsigned int textureID;
 	glGenTextures(1, &textureID);
@@ -80,6 +81,7 @@ unsigned int LoadTexture(const char* path) {
 
 	return textureID;
 }
+*/
 
 // setting MVPs
 void SetVPMatricies(Shader shader, mat4 view, mat4 projection) {

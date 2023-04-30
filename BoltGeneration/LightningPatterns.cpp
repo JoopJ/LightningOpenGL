@@ -11,7 +11,7 @@ int hVariationMax = 8;
 int vVariationMin = 6;
 int vVariationMax = 9;
 float multiplyer = 0.15f;
-bool alt = true;
+bool scale = true;
 
 // Particle
 vec3 particleSeed;
@@ -26,21 +26,19 @@ bool particleQuaternion = true;
 // L-System
 int lNumSegments = 0;
 vec3 boltEndPos;
-float startingMaxDisplacement = 30;
-int LSystemDetail = 8;
+float startingMaxDisplacement = 12;
+int LSystemDetail = 6;
 
 // Branching
 bool branching = true;
 int minBranchLength = 5;
 int maxBranchLength = 80;
 
-float randomPositionsBranchChance = 0;
-float particleSystemBranchChance = 0.8;
-float LSystemBranchChance = 0;
+float randomPositionsBranchChance = 0.8f;
+float particleSystemBranchChance = 0.8f;
+float LSystemBranchChance = 50.0f;
 
 float LSystemBranchScaler = 0.7f;
-
-float LSystemBranchVariation = 0.5f;
 int LSystemBranchMinDetail = 4;
 
 // Random
@@ -57,7 +55,6 @@ quat CreateRotationQuaternion(vec3 seed, float theta) {
 	float sin = glm::sin(theta / 2);
 
 	return quat(cos(theta / 2), seed.x * sin, seed.y * sin, seed.z * sin);
-
 }
 bool RollBranchChance(float branchChance) {
 	// Given an int in the range [0, 100], rolls a random number between 0 and 100
@@ -78,14 +75,17 @@ int RandomFlux() {
 // Random Positions:
 glm::vec3 NextPoint(glm::vec3 point) {
 	int vVariationDiff = vVariationMax - vVariationMin;
+	int hVariationDiff = hVariationMax - hVariationMin;
 
 	// get random variatins
-	float dx = hVariationMin + (rand() % (hVariationMax - hVariationMin + 1));
+	float dx = hVariationMin + (rand() % (hVariationDiff + 1));
 	float dy = vVariationMin + (rand() % (vVariationDiff + 1));
-	float dz = hVariationMin + (rand() % (hVariationMax - hVariationMin + 1));
+	float dz = hVariationMin + (rand() % (hVariationDiff + 1));
 
 	// Scale dx and dz with dy.
-	if (alt) {
+	if (scale) {
+		// s = [1.0 - 0.0], 
+		// s = 1.0 when dy = vVariationMax, s = 0.0 when dy = vVariationMin
 		float s = (dy-float(vVariationMin)) / float(vVariationDiff);
 		dx *= s;
 		dz *= s;
@@ -145,7 +145,6 @@ vec3 RotatePointAboutSeedQuaternion(vec3 point, pair<vec3, vec3> seedPerpAxis, f
 	// In built GLM
 	//return vec3(pA.x, pA.y, pA.z);
 }
-
 glm::mat3 ConstructRotationMatrix(vec3 V, float r) {
 
 	// Pre calculate values
@@ -164,7 +163,6 @@ glm::mat3 ConstructRotationMatrix(vec3 V, float r) {
 
 	return M;
 }
-
 vec3 RotatePointAboutSeedMatrix(vec3 p, pair<vec3, vec3> seedPerpAxis, float r1, float r2) {
 
 	glm::mat3 M1 = ConstructRotationMatrix(seedPerpAxis.first, r1);
@@ -175,7 +173,6 @@ vec3 RotatePointAboutSeedMatrix(vec3 p, pair<vec3, vec3> seedPerpAxis, float r1,
 	
 	return p;
 }
-
 vec3 RotatePointAboutSeed(vec3 point, pair<vec3, vec3> seedPerpaxis) {
 	// normal distribution for angle
 	std::normal_distribution<float> angle(angleDegrees, angleVariance);
@@ -185,9 +182,6 @@ vec3 RotatePointAboutSeed(vec3 point, pair<vec3, vec3> seedPerpaxis) {
 	float degree2 = RandomFlux() * angle(gen);
 	float r1 = glm::radians(degree1);
 	float r2 = glm::radians(degree2);
-
-	//std::cout << "Degree 1: " << degree1 << std::endl;
-	//std::cout << "Degree 2: " << degree2 << std::endl;
 
 	if (particleQuaternion) {
 		return RotatePointAboutSeedQuaternion(point, seedPerpaxis, r1, r2);
@@ -200,8 +194,8 @@ vec3 RotatePointAboutSeed(vec3 point, pair<vec3, vec3> seedPerpaxis) {
 // L-System:
 vec3 GetPerpAxis(vec3 axis) {
 	// Returns a perpendicular vector to the given axis.
-	// the perp vector is rotated by a random angle around
-	// the original axis.
+	// the perp vector is positioned at a random angle 
+	// around the original axis.
 
 	// get perpendicular axis
 	vec3 perp = cross(axis, vec3(axis.x, -axis.z, axis.y));
@@ -209,12 +203,11 @@ vec3 GetPerpAxis(vec3 axis) {
 	// get random angle
 	float radian = glm::radians((float)(rand() % 360));
 
-	// create rotation quaternion and it's inverse
+	// create rotation quaternion
 	quat r = CreateRotationQuaternion(axis, radian);
-	//r.fromAngleAxis(radian, irr::core::vector3df(axis.x, axis.y, axis.z));
 
 	// convert perp to quaternion
-	quat p = quat(perp.x, perp.y, perp.z, 0);
+	quat p = quat(0, perp.x, perp.y, perp.z);
 
 	// apply rotation
 	p = r * p * glm::inverse(r);
@@ -404,13 +397,14 @@ vector<pair<vec3, vec3>>* GenerateParticleSystemPattern(
 
 	vec3 prevEnd = boltStartPos;
 	vec3 newPoint = prevEnd + seed * length(gen) * lengthMultiplyer;
+	// add first segment to the pattern
+	patternPtr->push_back({ ConvertWorldToScreen(prevEnd), ConvertWorldToScreen(newPoint) });
 
 	for (int i = 0; i < pNumSegments; i++) {
-		// add the new segment to the pattern
-		patternPtr->push_back({ ConvertWorldToScreen(prevEnd), ConvertWorldToScreen(newPoint) });
 
 		// Branch
 		if (branching && RollBranchChance(particleSystemBranchChance)) {
+			// the branch's start point the end of the previous segment
 			// the branch's seed is the previous segment
 			ParticleSystemBranch(newPoint, (newPoint-prevEnd), BranchLength(), patternPtr);
 		}
@@ -422,8 +416,10 @@ vector<pair<vec3, vec3>>* GenerateParticleSystemPattern(
 
 		// roate with respect to the seed
 		newPointMove = RotatePointAboutSeed(newPointMove, seedPerpAxis);
-		//std::cout << "Lenght: " << len << std::endl;
 		newPoint = prevEnd + newPointMove;
+
+		// add the new segment to the pattern
+		patternPtr->push_back({ ConvertWorldToScreen(prevEnd), ConvertWorldToScreen(newPoint) });
 
 	}
 
@@ -519,17 +515,12 @@ vector<pair<vec3, vec3>>* GenerateLSystemPattern(vector<pair<vec3, vec3>>* patte
 			segmentsWrite->push_back({ mid, currentSeg.second });
 
 			// Branch
-			// don't branch when d is below certain value. 
-			// A branch with low detail looks unrealistic.
-			if (branching && d > LSystemBranchMinDetail && RollBranchChance(LSystemBranchChance)) {
+			if (branching && RollBranchChance(LSystemBranchChance)) {
 
+				// get the direction of S1
 				vec3 dir = mid - currentSeg.first;
 
-				// TODO : introduce a little variation to the direction
-
 				vec3 branchEnd = mid + (dir * LSystemBranchScaler);
-
-				if (branchEnd == mid);
 
 				segmentsWrite->push_back({ mid, branchEnd });
 			}
@@ -573,7 +564,7 @@ void BoltGenerationGUI(int method) {
 		ImGui::Text("Vertical");
 		ImGui::DragIntRange2("##Vertical", &vVariationMin, &vVariationMax, 0.1f, 0, 15);
 		ImGui::Text("Scale Variation");
-		ImGui::Checkbox("##scaleAlt", &alt);
+		ImGui::Checkbox("##scale", &scale);
 		ImGui::Text("Multiplyer");
 		ImGui::SliderFloat("##Multiplyer", &multiplyer, 0.1f, 2.0f);
 		break;
@@ -584,9 +575,7 @@ void BoltGenerationGUI(int method) {
 		ImGui::DragFloatRange2("##segmentLength", &minLength, &maxLength, 0.01f, 0.01f, 5.0f, "Min: %.2f", "Max: %.2f");
 		ImGui::InputFloat("##lengthMultiplyer", &lengthMultiplyer, 1.0f, 15.0f, "%.1f");
 		ImGui::Text("Angle");
-		if (ImGui::SliderFloat("##angle", &angleDegrees, 1.0f, 32.0f)) {
-
-		}
+		(ImGui::SliderFloat("##angle", &angleDegrees, 1.0f, 32.0f));
 		ImGui::Text("Angle Variance");
 		ImGui::SliderFloat("##angleVariance", &angleVariance, 0.0f, 10.0f);
 		break;
@@ -615,21 +604,24 @@ void BoltGenerationGUI(int method) {
 		ImGui::Text("%d", lNumSegments);
 		break;
 	}
-		
-	ImGui::Separator();
-	ImGui::Text("Branch Chance");
-	switch (method) {
-	case 0:
-		ImGui::InputFloat("##rpChance", &randomPositionsBranchChance, 0.1, 1, "%.1f");
-		break;
-	case 1:
-		ImGui::InputFloat("##psChace", &particleSystemBranchChance, 0.1, 1, "%.1f");
-		ImGui::Text("Branch Length");
-		ImGui::DragIntRange2("##branchLength", &minBranchLength, &maxBranchLength, 1.0f, 0, pNumSegments, "Min:0% d", "Max: %d");
-		break;
-	case 2:
-		ImGui::InputFloat("##lsChance", &LSystemBranchChance, 0.1, 1, "%.1f");
-		break;
+	
+	ImGui::Checkbox("Branching", &branching);
+	if (branching) {
+		ImGui::Separator();
+		ImGui::Text("Branch Chance");
+		switch (method) {
+		case 0:
+			ImGui::InputFloat("##rpChance", &randomPositionsBranchChance, 0.1, 1, "%.1f");
+			break;
+		case 1:
+			ImGui::InputFloat("##psChace", &particleSystemBranchChance, 0.1, 1, "%.1f");
+			ImGui::Text("Branch Length");
+			ImGui::DragIntRange2("##branchLength", &minBranchLength, &maxBranchLength, 1.0f, 0, pNumSegments, "Min:0% d", "Max: %d");
+			break;
+		case 2:
+			ImGui::InputFloat("##lsChance", &LSystemBranchChance, 0.1, 1, "%.1f");
+			break;
+		}
 	}
 
 	ImGui::End();
@@ -651,8 +643,8 @@ void SetLSystemOptions(vec3 end, int detail, float maxDisplacement) {
 	startingMaxDisplacement = maxDisplacement;
 }
 
-void SetRandomOptions(bool _alt) {
-	alt = _alt;
+void SetRandomOptions(bool _scale) {
+	scale = _scale;
 }
 
 void SetParticleOptions(vec3 seed) {
@@ -662,6 +654,7 @@ void SetParticleOptions(vec3 seed) {
 void SetNumSegments(int num) {
 	rNumSegments = num;
 	pNumSegments = num;
+	// can't set the number of segments for L-System
 }
 // --------------------------
 

@@ -45,6 +45,6 @@ void BoltGenerationGUI(int method);
 void SetStartPos(vec3 start);
 void SetEndPos(vec3 end);
 void SetLSystemOptions(vec3 end, int detail, float maxDisplacement);
-void SetRandomOptions(bool _alt);
+void SetRandomOptions(bool _scale);
 void SetParticleOptions(vec3 seed);
 void SetNumSegments(int num);

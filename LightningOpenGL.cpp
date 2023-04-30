@@ -50,31 +50,19 @@ using std::vector;
 using glm::radians;
 using glm::lookAt;
 
-// post processing
-int amount = 4;
-float exposure = 8.0f;
-float gamma = 2.2f;
-
 // lightning options
 float boltAlpha = 1.0f;
 vec3 boltColor = vec3(1.0f, 1.0f, 1.0f);	// Yellow
 vec3 cubeLightColor = vec3(1);				// White
-bool newBolt = true; // signals to generate a new bolt
 
 // toggles
 bool shadowsEnabled = true;
-bool shadowKeyPressed = false;
-bool bloom = false;
-bool bloomKeyPressed = false;
-bool gammaCorrectionEnabled = true;
-bool exposureEnabled = true;
 
 // Array Type
 bool DYNAMIC_BOLT = true;
 
 // Method Choice
-int methodChoice = 1; // 0 = random, 1 = particle system, 2 = l-system
-const char* methodNames[3] = { "Random Positions", "Particle System", "L-System"};
+int methodChoice = 2; // 0 = random, 1 = particle system, 2 = l-system
 
 // function prototypes
 // MVP Setters
@@ -86,16 +74,15 @@ void DrawLineBolt(vector<LineBoltSegment>* lboltPtr);
 void DrawLightBoxes(Shader shader, vector<vec3>* lightPositions);
 void DrawLightBoxes(Shader shader, vec3* lightPositions);
 // Input
-void ProcessMiscInput(GLFWwindow* window, bool* firstButtonPress);
-void ProcessLightningControlInput(GLFWwindow* window);
+void ProcessMiscInput(GLFWwindow* window);
+void ProcessLightningControlInput(GLFWwindow* window, bool* newBolt);
 // Config
 void ConfigureWindow();
 GLFWwindow* CreateWindow();
 void InitImGui(GLFWwindow* window);
 // GUI
-void RenderImGui(LightManager* lm, PerformanceManager* pm);
-void PostProcessingGUI();
-void BoltControlGUI(PerformanceManager* pm);
+void RenderImGui(LightManager* lm, PerformanceManager* pm, FboManager* fm, bool* newBolt);
+void BoltControlGUI(PerformanceManager* pm, bool* newBolt);
 void SceneGUI();
 
 
@@ -104,8 +91,9 @@ int main() {
 	std::cout << "LightningOpenGL" << std::endl;
 	// Initial Configurations and Window Creation
 	// -------------------------
-	std::srand(time(0));
-	SetWidthAndHeight(SCR_WIDTH, SCR_HEIGHT);
+	std::srand(time(0));	// seed random number generator
+	bool newBolt = true;	// signals to generate a new bolt
+
 	ConfigureWindow();
 	GLFWwindow* window = CreateWindow();
 	if (window == NULL) {	// exit if window creation fails
@@ -118,7 +106,7 @@ int main() {
 	glEnable(GL_CULL_FACE);
 	// -------------------------
 
-	// Load Models
+	// Load
 	// -------------------------
 	LoadModels();
 	// -------------------------
@@ -131,51 +119,56 @@ int main() {
 	glfwSetScrollCallback(window, scroll_callback);
 	// mouse capture
 	glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-	bool firstMouseKeyPress = true;
 	// -------------------------
 
 	// Bolt Objects Setup
 	// -------------------------
-	// Line Segments
-	// static
-	LineBoltSegment boltLinesStatic[numSegmentsInPattern+1];
-	LineBoltSegment* staticLineSegmentsPtr = &boltLinesStatic[0];
-	// dynamic
-	vector<LineBoltSegment> boltLinesDynamic;
-	vector<LineBoltSegment>* dynamicLineSegmentsPtr = &boltLinesDynamic;
+	
+	// STATIC
+	// Uses a fixed sized array. size = numSegmentsInPattern (defined in LightningPatterns.h)
 
+	// Segments
+	LineBoltSegment staticSegments[numSegmentsInPattern+1];
+	LineBoltSegment* staticSegmentsPtr = &staticSegments[0];
 	// Point Lights
 	const int maxNumPointLights = 100;
-	// static
-	vec3 pointLightPositionsStatic[maxNumPointLights];
-	vec3* staticPointLightPositionsPtr;
-	staticPointLightPositionsPtr = &pointLightPositionsStatic[0];
-	// dynamic
-	vector<vec3> pointLightPositionsDynamic;
-	vector<vec3>* dynamicPointLightPositionsPtr;
-	dynamicPointLightPositionsPtr = &pointLightPositionsDynamic;
+	vec3 staticPointLights[maxNumPointLights];
+	vec3* staticPointLightsPtr;
+	staticPointLightsPtr = &staticPointLights[0];
+	// Bolt Pattern
+	std::shared_ptr<vec3[numSegmentsInPattern]> staticBoltPtr;
+	staticBoltPtr = std::make_shared<vec3[numSegmentsInPattern]>();
 
-	// Pattern
-	// static
-	std::shared_ptr<vec3[numSegmentsInPattern]> lightningStaticPatternPtr;
-	lightningStaticPatternPtr = std::make_shared<vec3[numSegmentsInPattern]>();
-	// dynamic
-	vector<pair<vec3, vec3>> lightningDynamicPattern;
-	vector<pair<vec3, vec3>>* lightningDynamicPatternPtr = &lightningDynamicPattern;
+	// DYNAMIC
+	// Uses a vector of dyanmic size. Required for branching.
+
+	// Segments
+	vector<LineBoltSegment> dynamicSegments;
+	vector<LineBoltSegment>* dynamicSegmentsPtr = &dynamicSegments;
+	// Point Lights
+	vector<vec3> dynamicPointLights;
+	vector<vec3>* dynamicPointLightsPtr;
+	dynamicPointLightsPtr = &dynamicPointLights;
+	// Bolt Pattern
+	vector<pair<vec3, vec3>> dynamicBolt;
+	vector<pair<vec3, vec3>>* dynamicBoltPtr = &dynamicBolt;
+
 	// -------------------------
 
 	// Shaders
 	// -------------------------
-	// Bolt
-	Shader boltShader = LoadShader("bolt.vert", "bolt.frag");
 	// Post Processing
 	Shader blurShader = LoadShader("blur.vert", "blur.frag");
 	Shader screenShader = LoadShader("screen.vert", "screen.frag");
 	// Deferred Shadring
-	Shader lightCubeShader = LoadShader("light.vert", "light.frag");
 	Shader geometryPassShader = LoadShader("g_buffer.vert", "g_buffer.frag");
 	Shader lightingPassShader = LoadShader("lighting_pass.vert", "lighting_pass.frag");
+	// Shadow Mapping
 	Shader depthShader = LoadShader("depth.vert", "depth.frag", "depth_multiple_cubemap.geom");
+	// Light Cube (forward shading)
+	Shader lightCubeShader = LoadShader("light.vert", "light.frag");
+	// Bolt (forward shading)
+	Shader boltShader = LoadShader("bolt.vert", "bolt.frag");
 
 	// Shader Setup
 	lightingPassShader.Use();
@@ -210,26 +203,27 @@ int main() {
 	// Set timers that aren't updated every frame
 	performanceManager.SetTimerUpdateType(NEW_BOLT, true);
 	performanceManager.SetTimerUpdateType(SHADOW_MAPS, true);
-	// Set timers to output their results
-	//performanceManager.SetOutputResults(SHADOW_MAPS, true);
 	// -------------------------
 
 	// Initial Bolt Generation Options
 	// ----------------
 	// Set the Method
-	SetMethod(methodChoice);
+	SetMethod(2);
+
 	// Set Method Properties:
-	SetStartPos(vec3(20, 90, 0));
+	SetStartPos(vec3(20, 60, 0));
 
 	// Generation Method 0: Random Positions
+	// Scale dx & dz with dy
 	SetRandomOptions(true);
 
 	// Generation Method 1: Particle System
+	// Seed Segment
 	SetParticleOptions(vec3(6, -100, -4));
 
 	// Generation Method 2: L-System
 	// End Point, Detail, Max Displacement.
-	SetLSystemOptions(vec3(-20, 0, 0), 8, 30.0f);
+	SetLSystemOptions(vec3(10, 0, 0), 6, 12.0f);
 	// ----------------
 
 	// G-Buffer -------
@@ -271,15 +265,15 @@ int main() {
 		
 		// Performance updates
 		// -----------------------
-		performanceManager.DynamicPatternInfo(lightningDynamicPatternPtr);
-		performanceManager.StaticPatternInfo(lightningStaticPatternPtr);
+		performanceManager.DynamicPatternInfo(dynamicBoltPtr);
+		performanceManager.StaticPatternInfo(staticBoltPtr);
 		// -----------------------
 
 		// Input
 		// -----------------------
 		ProcessKeyboardInput(window);
-		ProcessMiscInput(window, &firstMouseKeyPress);
-		ProcessLightningControlInput(window);
+		ProcessMiscInput(window);
+		ProcessLightningControlInput(window, &newBolt);
 		// -----------------------
 
 		// Testing ---------------
@@ -301,34 +295,35 @@ int main() {
 		*/
 		// -----------------------
 
-		// New Bolt
+		// Generate Bolt
+		// -----------------------
 		if (newBolt) {
 			auto t1 = std::chrono::high_resolution_clock::now();
 
+			// Dynamic Bolt
 			if (DYNAMIC_BOLT) {
-				// Dynamic Bolt
-				NewBolt(dynamicLineSegmentsPtr, dynamicPointLightPositionsPtr,
-					lightningDynamicPatternPtr);
+				NewBolt(dynamicSegmentsPtr, dynamicPointLightsPtr,
+					dynamicBoltPtr);
 
 				performanceManager.Update(NEW_BOLT, t1, std::chrono::high_resolution_clock::now());
 
 				// Set the LineSegment's Positions based on generated pattern
-				DefineBoltLines(dynamicLineSegmentsPtr, lightningDynamicPatternPtr);
+				DefineBoltLines(dynamicSegmentsPtr, dynamicBoltPtr);
 				// Set the PointLight's Positions based on generated pattern
-				PositionBoltPointLights(dynamicPointLightPositionsPtr, lightningDynamicPatternPtr);
+				PositionBoltPointLights(dynamicPointLightsPtr, dynamicBoltPtr);
 				// Set the LightManager's Light Positions
-				lightManager.SetLightPositions(dynamicPointLightPositionsPtr);
+				lightManager.SetLightPositions(dynamicPointLightsPtr);
 			}
+			// Static Bolt
 			else {
-				// Static Bolt
-				NewBolt(staticLineSegmentsPtr, staticPointLightPositionsPtr,
-					lightningStaticPatternPtr);
+				NewBolt(staticSegmentsPtr, staticPointLightsPtr,
+					staticBoltPtr);
 
 				performanceManager.Update(NEW_BOLT, t1, std::chrono::high_resolution_clock::now());
 
-				DefineBoltLines(staticLineSegmentsPtr, lightningStaticPatternPtr);
-				PositionBoltPointLights(staticPointLightPositionsPtr, lightningStaticPatternPtr);
-				lightManager.SetLightPositions(staticPointLightPositionsPtr);
+				DefineBoltLines(staticSegmentsPtr, staticBoltPtr);
+				PositionBoltPointLights(staticPointLightsPtr, staticBoltPtr);
+				lightManager.SetLightPositions(staticPointLightsPtr);
 			}
 			/*
 			duration<double, std::milli> ms = high_resolution_clock::now() - t1;
@@ -336,16 +331,17 @@ int main() {
 			count++;
 			*/
 		}
-
-		// MVP
-		mat4 model = mat4(1.0f);
-		mat4 view = lookAt(GetCameraPos(), GetCameraPos() + GetCameraFront(), GetCameraUp());
-		mat4 projection = glm::perspective(glm::radians(GetFOV()), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.0f);
+		// -----------------------
 
 		// Rendering
-		// --------------------------
+		// -----------------------
 		glClearColor(0.5f, 0.5f, 0.5f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+		// MVP
+		//mat4 model = mat4(1.0f);
+		mat4 view = lookAt(GetCameraPos(), GetCameraPos() + GetCameraFront(), GetCameraUp());
+		mat4 projection = glm::perspective(glm::radians(GetFOV()), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.0f);
 
 		// 1. Geometry Pass: render all geometric/color data to g-buffer
 		// -----------------
@@ -362,12 +358,13 @@ int main() {
 
 		performanceManager.Update(GEOMETRY_PASS, t1, std::chrono::high_resolution_clock::now());
 
-		// Generate Shadow Maps, for new bolts
+
+		// 1.5. Shadow Maps: render depth maps for each light source
+		// -----------------
 		if (newBolt) {
 			t1 = std::chrono::high_resolution_clock::now();
 			lightManager.RenderDepthMaps();
 			performanceManager.Update(SHADOW_MAPS, t1, std::chrono::high_resolution_clock::now());
-			newBolt = false;
 		}
 
 		// 2. Lighting Pass: calculate lighting by iterating over a screen filled quad 
@@ -387,7 +384,7 @@ int main() {
 		lightManager.SetLightingPassUniforms(&lightingPassShader);
 		lightingPassShader.SetVec3("viewPos", GetCameraPos());
 		lightingPassShader.SetBool("shadows", shadowsEnabled);
-		lightingPassShader.SetBool("blurEnabled", bloom);
+		lightingPassShader.SetBool("blurEnabled", fboManager.GetGlowEnabled());
 
 		RenderQuad();
 
@@ -415,33 +412,33 @@ int main() {
 
 		if (DYNAMIC_BOLT) {
 			// Dynamic Bolt
-			DrawLineBolt(dynamicLineSegmentsPtr);
+			DrawLineBolt(dynamicSegmentsPtr);
 
 			if (lightManager.GetLightBoxesEnabled()) {
 				// Draw Point Light boxes
 				lightCubeShader.Use();
 				SetVPMatricies(lightCubeShader, view, projection);
-				DrawLightBoxes(lightCubeShader, dynamicPointLightPositionsPtr);
+				DrawLightBoxes(lightCubeShader, dynamicPointLightsPtr);
 			}
 		}
 		else {
 			// Static Bolt
-			DrawLineBolt(staticLineSegmentsPtr);
+			DrawLineBolt(staticSegmentsPtr);
 
 			if (lightManager.GetLightBoxesEnabled()) {
 				// Draw Point Light boxes
 				lightCubeShader.Use();
 				SetVPMatricies(lightCubeShader, view, projection);
-				DrawLightBoxes(lightCubeShader, staticPointLightPositionsPtr);
+				DrawLightBoxes(lightCubeShader, staticPointLightsPtr);
 			}
 		}
 
 		performanceManager.Update(RENDER_BOLT, t1, std::chrono::high_resolution_clock::now());
 
-		// 4. Bloom
+		// 4. Glow
 		// -----------------
 		t1 = std::chrono::high_resolution_clock::now();
-		bool horizontal = fboManager.ApplyBloom(blurShader, amount);
+		fboManager.ApplyGlow(blurShader);
 		performanceManager.Update(BLOOM, t1, std::chrono::high_resolution_clock::now());
 
 		// 5. Blend Scene and Blurred Bolt to default framebuffer
@@ -452,20 +449,18 @@ int main() {
 		glClear(GL_COLOR_BUFFER_BIT);
 
 		screenShader.Use();
-		fboManager.BindSceneAndBloom();
-		screenShader.SetBool("bloomEnabled", bloom);
-		screenShader.SetBool("gammaEnabled", gammaCorrectionEnabled);
-		screenShader.SetFloat("exposure", exposure);
-		screenShader.SetBool("exposureEnabled", exposureEnabled);
-		screenShader.SetFloat("gamma", gamma);
+		// Binds textures and Sets uniforms
+		fboManager.PrepareScreenShader(&screenShader);
 		RenderQuad();
 
 		performanceManager.Update(BLEND, t1, std::chrono::high_resolution_clock::now());
 
 		// 6. GUI
 		// -----------------
-		RenderImGui(&lightManager, &performanceManager);
-		// --------------------------
+		newBolt = false;
+		RenderImGui(&lightManager, &performanceManager, &fboManager, &newBolt);
+		// -----------------------
+		// End of Rendering
 
 		// glfw: swap buffers and poll IO events
 		glfwSwapBuffers(window);
@@ -525,14 +520,19 @@ void DrawLightBoxes(Shader shader, vec3* lightPositions) {
 // Input Processing:
 // -------------------
 // ProcessMiscInput, process inputs relating to control of the application
-void ProcessMiscInput(GLFWwindow* window, bool* firstButtonPress) {
+void ProcessMiscInput(GLFWwindow* window) {
+
+	static bool firstButtonPress = true;
+	static bool shadowKeyPressed = false;
+	static bool bloomKeyPressed = false;
+
 	if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
 		glfwSetWindowShouldClose(window, true);
 
 	if (glfwGetKey(window, GLFW_KEY_M) == GLFW_PRESS) {
 
-		if (*firstButtonPress) {
-			*firstButtonPress = false;
+		if (firstButtonPress) {
+			firstButtonPress = false;
 
 			if (GetMouseEngaged()) {
 				SetMouseEngaged(false);
@@ -546,18 +546,7 @@ void ProcessMiscInput(GLFWwindow* window, bool* firstButtonPress) {
 		}
 	}
 	else if (glfwGetKey(window, GLFW_KEY_M) == GLFW_RELEASE) {
-		*firstButtonPress = true;
-
-	}
-
-	if (glfwGetKey(window, GLFW_KEY_B) == GLFW_PRESS && !bloomKeyPressed)
-	{
-		bloom = !bloom;
-		bloomKeyPressed = true;
-	}
-	if (glfwGetKey(window, GLFW_KEY_B) == GLFW_RELEASE)
-	{
-		bloomKeyPressed = false;
+		firstButtonPress = true;
 	}
 
 	if (glfwGetKey(window, GLFW_KEY_V) == GLFW_PRESS && !shadowKeyPressed)
@@ -571,15 +560,16 @@ void ProcessMiscInput(GLFWwindow* window, bool* firstButtonPress) {
 	}
 }
 
-bool spaceHeld = false;
 // ProcessLightningControlInput, process inputs relating to control of the lightning.
 // returns true when a new strike is initiated, false otherwise.
-void ProcessLightningControlInput(GLFWwindow* window) {
+void ProcessLightningControlInput(GLFWwindow* window, bool* newBolt) {
+	static bool spaceHeld = false;
+
 	// recalculate lines
 	if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS && !spaceHeld) {
 		// std::cout << "New Strike" << std::endl;
 		spaceHeld = true;
-		newBolt = true;
+		*newBolt = true;
 	}
 	else if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_RELEASE) {
 		spaceHeld = false;
@@ -600,7 +590,7 @@ void ConfigureWindow() {
 }
 
 // GUI:
-void RenderImGui(LightManager *lm, PerformanceManager *pm) {
+void RenderImGui(LightManager *lm, PerformanceManager *pm, FboManager *fm, bool* newBolt) {
 	ImGui_ImplOpenGL3_NewFrame();
 	ImGui_ImplGlfw_NewFrame();
 	ImGui::NewFrame();
@@ -642,7 +632,7 @@ void RenderImGui(LightManager *lm, PerformanceManager *pm) {
 
 	// Windows
 	if (toggleBoltControlWindow)
-		BoltControlGUI(pm);
+		BoltControlGUI(pm, newBolt);
 
 	if (toggleBoltGenWindow)
 		BoltGenerationGUI(methodChoice);
@@ -651,7 +641,7 @@ void RenderImGui(LightManager *lm, PerformanceManager *pm) {
 		lm->LightingGUI();
 
 	if (togglePostProcessingWindow)
-		PostProcessingGUI();
+		fm->PostProcessingGUI();
 
 	if (toggleTimersWindw)
 		pm->TimersGUI();
@@ -669,7 +659,9 @@ void RenderImGui(LightManager *lm, PerformanceManager *pm) {
 	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 }
 
-void BoltControlGUI(PerformanceManager* pm) {
+void BoltControlGUI(PerformanceManager* pm, bool* newBolt) {
+	static const char* methodNames[3] = { "Random Positions", "Particle System", "L-System" };
+
 	const ImVec2 startPos = ImVec2(5, 183);
 	ImGui::SetNextWindowPos(startPos, ImGuiCond_Once);
 
@@ -683,7 +675,7 @@ void BoltControlGUI(PerformanceManager* pm) {
 	ImGui::Text("Storage Type:");
 	if (ImGui::Button(DYNAMIC_BOLT ? "Dynamic" : "Static")) {
 		DYNAMIC_BOLT = !DYNAMIC_BOLT;
-		newBolt = true;
+		*newBolt = true;
 	}
 	ImGui::Text("Pattern Info:");
 	if (DYNAMIC_BOLT) {
@@ -696,45 +688,21 @@ void BoltControlGUI(PerformanceManager* pm) {
 	ImGui::End();
 }
 
-void PostProcessingGUI() {
-	const ImVec2 startPos = ImVec2(575, 119);
-	ImGui::SetNextWindowPos(startPos, ImGuiCond_Once);
-	ImGui::Begin("Post Processing", NULL, ImGuiWindowFlags_AlwaysAutoResize);
-
-	if (ImGui::CollapsingHeader("Bloom")) {
-		ImGui::Text("Amount:");
-		ImGui::SliderInt("", &amount, 0, 20);
-		ImGui::Checkbox("Enabled", &bloom);
-	}
-
-	if (ImGui::CollapsingHeader("Gamma Correction")) {
-		ImGui::Text("Gamma:");
-		ImGui::SliderFloat("##", &gamma, 0.1f, 5.0f, "%.1f");
-		ImGui::Checkbox("##Enabled", &gammaCorrectionEnabled);
-	}
-
-	if (ImGui::CollapsingHeader("Exposre")) {
-		ImGui::Text("Exposure:");
-		ImGui::SliderFloat("###", &exposure, 0.1f, 30, "%.1f");
-		ImGui::Checkbox("###Enabled", &exposureEnabled);
-	}
-	
-	ImGui::End();
-}
-
 void SceneGUI() {
 	ImGui::Begin("Scenes");
 
 	if (ImGui::BeginListBox("Scenes")) {
 		if (ImGui::Selectable("Empty")) {
 			SetScene(0);
+			SetStartPos(vec3(20, 60, 0));
+			SetEndPos(vec3(10, 0, 0));
 		}
 		if (ImGui::Selectable("Default")) {
 			SetScene(1);
-			SetStartPos(vec3(-20, 90, 0));
-			SetEndPos(vec3(-20, 0, 0));
+			SetStartPos(vec3(20, 60, 0));
+			SetEndPos(vec3(10, 0, 0));
 		}
-		if (ImGui::Selectable("Scene _")) {
+		if (ImGui::Selectable("------")) {
 			//SetScene(2);
 		}
 		ImGui::EndListBox();
